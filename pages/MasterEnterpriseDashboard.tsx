@@ -179,7 +179,7 @@ export default function MasterEnterpriseDashboard() {
     return Object.entries(byDay)
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-14)
-      .map(([name, reports: number]) => ({ name, reports }));
+      .map(([name, count]) => ({ name, reports: count }));
   }, [reports]);
 
   const navItems: { id: TabId; label: string; icon: string }[] = [

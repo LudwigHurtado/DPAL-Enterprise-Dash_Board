@@ -15,11 +15,14 @@
     "recharts": "latest"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "25.3.3",
+    "@types/react": "19.2.14",
     "autoprefixer": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
     "postcss": "latest",
     "tailwindcss": "latest",
-    "typescript": "latest",
-    "eslint": "latest",
-    "eslint-config-next": "latest"
+    "typescript": "latest"
   }
 }
