@@ -322,7 +322,7 @@ export default function MasterEnterpriseDashboard() {
                             cx="50%"
                             cy="50%"
                             outerRadius={80}
-                            label={({ name, count }) => `${name}: ${count}`}
+                            label={({ name, value }) => `${name}: ${value}`}
                           >
                             {byStatus.map((_, i) => (
                               <Cell key={i} fill={STATUS_COLORS[byStatus[i].name] || '#64748b'} />
