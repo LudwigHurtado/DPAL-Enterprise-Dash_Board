@@ -1,4 +1,4 @@
-import MasterEnterpriseDashboard from '@/src/pages/MasterEnterpriseDashboard';
+import MasterEnterpriseDashboard from '@/pages/MasterEnterpriseDashboard';
 
 export const metadata = {
   title: 'Master Enterprise Dashboard — DPAL Nexus',
