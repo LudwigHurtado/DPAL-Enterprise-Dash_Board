@@ -488,3 +488,4 @@ export default function MasterEnterpriseDashboard() {
     </div>
   );
 }
+
