@@ -66,8 +66,9 @@ export async function getReportsFeed(params: {
   entityType?: string;
   entityName?: string;
   status?: string;
+  apiBase?: string;
 } = {}): Promise<ReportsFeedResult> {
-  const base = getBase();
+  const base = params.apiBase ?? getBase();
   if (!base) {
     return { ok: false, items: [] };
   }

@@ -25,31 +25,35 @@ import {
   Cell,
 } from 'recharts';
 
+const STORAGE_KEY = 'dpal_api_base_override';
+
 type TabId = 'overview' | 'quality' | 'sites';
 
 const STATUS_COLORS: Record<string, string> = {
-  New: '#f59e0b',
-  Investigating: '#3b82f6',
-  'Action Taken': '#8b5cf6',
-  Resolved: '#22c55e',
+  New: '#f29900',
+  Investigating: '#1a73e8',
+  'Action Taken': '#9334e6',
+  Resolved: '#1e8e3e',
 };
 
 function Card({
   title,
   children,
   right,
+  className = '',
 }: {
   title: string;
   children: React.ReactNode;
   right?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-800/50 shadow-lg">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-        <div className="text-sm font-semibold text-slate-200">{title}</div>
+    <div className={`rounded-xl border border-gray-200 bg-white shadow-sm ${className}`}>
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h3 className="text-sm font-medium text-gray-800">{title}</h3>
         {right}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-5">{children}</div>
     </div>
   );
 }
@@ -57,18 +61,35 @@ function Card({
 function StatusBadge({ ok, label }: { ok: boolean; label?: string }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-        ok ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+        ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
       }`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-400' : 'bg-red-400'}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${ok ? 'bg-green-500' : 'bg-red-500'}`} />
       {label ?? (ok ? 'Healthy' : 'Down')}
     </span>
   );
 }
 
+function EmptyState({ message, submessage }: { message: string; submessage?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      </div>
+      <p className="text-sm font-medium text-gray-700">{message}</p>
+      {submessage && <p className="mt-1 text-xs text-gray-500">{submessage}</p>}
+    </div>
+  );
+}
+
 export default function MasterEnterpriseDashboard() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [apiBaseOverride, setApiBaseOverride] = useState('');
+  const [apiBaseInput, setApiBaseInput] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [apiBase, setApiBase] = useState('');
   const [health, setHealth] = useState<HealthResult | null>(null);
   const [probes, setProbes] = useState<ProbeResult[]>([]);
@@ -76,16 +97,29 @@ export default function MasterEnterpriseDashboard() {
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('');
+
+  const effectiveBase = apiBaseOverride || getApiBase();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        setApiBaseOverride(saved);
+        setApiBaseInput(saved);
+      }
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
-    const base = getApiBase();
+    const base = effectiveBase;
     setApiBase(base);
     setError(null);
     setLoading(true);
     try {
       const [healthRes, feedRes, probesRes] = await Promise.all([
         base ? checkHealth(base) : Promise.resolve(null),
-        getReportsFeed({ limit: 200 }),
+        getReportsFeed({ limit: 200, apiBase: base || undefined }),
         base ? runProbes(base) : Promise.resolve([]),
       ]);
       if (healthRes) setHealth(healthRes);
@@ -98,13 +132,36 @@ export default function MasterEnterpriseDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [effectiveBase]);
 
   useEffect(() => {
     refresh();
     const interval = setInterval(refresh, 60_000);
     return () => clearInterval(interval);
   }, [refresh]);
+
+  const connectApi = () => {
+    const url = apiBaseInput.trim().replace(/\/$/, '');
+    if (url) {
+      setApiBaseOverride(url);
+      if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, url);
+      setSettingsOpen(false);
+      refresh();
+    }
+  };
+
+  const clearApiOverride = () => {
+    setApiBaseOverride('');
+    setApiBaseInput('');
+    if (typeof window !== 'undefined') localStorage.removeItem(STORAGE_KEY);
+    setSettingsOpen(false);
+    refresh();
+  };
+
+  const filteredReports = React.useMemo(() => {
+    if (!statusFilter) return reports;
+    return reports.filter((r) => (r.opsStatus || 'New') === statusFilter);
+  }, [reports, statusFilter]);
 
   const byStatus = React.useMemo(() => {
     const map: Record<string, number> = {};
@@ -182,135 +239,222 @@ export default function MasterEnterpriseDashboard() {
       .map(([name, count]) => ({ name, reports: count }));
   }, [reports]);
 
-  const navItems: { id: TabId; label: string; icon: string }[] = [
-    { id: 'overview', label: 'Overview', icon: '📊' },
-    { id: 'quality', label: 'Quality Control', icon: '✓' },
-    { id: 'sites', label: 'Site Monitoring', icon: '🌐' },
+  const navItems: { id: TabId; label: string }[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'quality', label: 'Quality Control' },
+    { id: 'sites', label: 'Site Monitoring' },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans">
-      <div className="sticky top-0 z-20 border-b border-slate-700 bg-slate-900/95 backdrop-blur">
-        <div className="mx-auto max-w-[1600px] px-6 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-lg font-bold">
-              DPAL
-            </div>
-            <div>
-              <div className="text-lg font-bold text-white">Master Enterprise Dashboard</div>
-              <div className="text-xs text-slate-400">
-                Quality control & site monitoring · {apiBase ? 'Connected' : 'No API base'}
-                {lastSync && ` · Last sync ${lastSync.toLocaleTimeString()}`}
+    <div className="min-h-screen bg-gray-50 font-sans">
+      {/* Top bar – Google-style */}
+      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white shadow-sm">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-google-blue text-white font-bold">
+                D
+              </div>
+              <div>
+                <h1 className="text-lg font-medium text-gray-900">
+                  DPAL Master Enterprise Dashboard
+                </h1>
+                <p className="text-xs text-gray-500">
+                  {effectiveBase ? 'Connected' : 'No API configured'}
+                  {lastSync && ` · Last sync ${lastSync.toLocaleTimeString()}`}
+                </p>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {apiBase ? (
-              <StatusBadge ok={health?.ok ?? false} label={health?.ok ? 'API up' : 'API down'} />
-            ) : (
-              <span className="text-xs text-amber-400">Set NEXT_PUBLIC_DPAL_API_BASE</span>
-            )}
-            <button
-              onClick={() => refresh()}
-              disabled={loading}
-              className="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-600 disabled:opacity-50"
-            >
-              {loading ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-[1600px] px-6 py-5 flex gap-5">
-        <aside className="w-52 flex-shrink-0 hidden lg:block">
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-3 sticky top-24">
-            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-2 py-2">
-              Sections
+            <div className="flex items-center gap-2">
+              {effectiveBase ? (
+                <StatusBadge ok={health?.ok ?? false} label={health?.ok ? 'API up' : 'API down'} />
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((o) => !o)}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                API & tools
+              </button>
+              <button
+                type="button"
+                onClick={() => refresh()}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-lg bg-google-blue px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+              >
+                {loading ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Refreshing…
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </>
+                )}
+              </button>
             </div>
-            <nav className="space-y-0.5">
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`w-full text-left rounded-xl px-3 py-2.5 text-sm font-medium flex items-center gap-2.5 transition-all ${
-                    activeTab === item.id
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
-                  }`}
-                >
-                  <span>{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
-            </nav>
           </div>
+
+          {/* API & tools panel */}
+          {settingsOpen && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <h3 className="mb-3 text-sm font-medium text-gray-800">API configuration</h3>
+              <p className="mb-3 text-xs text-gray-500">
+                Enter your DPAL API base URL (e.g. https://your-api.up.railway.app). You can also set{' '}
+                <code className="rounded bg-gray-200 px-1">NEXT_PUBLIC_DPAL_API_BASE</code> in Vercel or .env.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="url"
+                  value={apiBaseInput}
+                  onChange={(e) => setApiBaseInput(e.target.value)}
+                  placeholder="https://your-dpal-api.example.com"
+                  className="min-w-[280px] rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-google-blue focus:outline-none focus:ring-1 focus:ring-google-blue"
+                />
+                <button
+                  type="button"
+                  onClick={connectApi}
+                  className="rounded-lg bg-google-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Connect
+                </button>
+                {apiBaseOverride ? (
+                  <button
+                    type="button"
+                    onClick={clearApiOverride}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                  >
+                    Clear override
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
+        <aside className="hidden w-52 flex-shrink-0 lg:block">
+          <nav className="sticky top-28 space-y-0.5 rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
+            {navItems.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                  activeTab === item.id
+                    ? 'bg-google-blue/10 text-google-blue'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
         </aside>
 
-        <main className="flex-1 min-w-0 space-y-5">
+        <main className="min-w-0 flex-1 space-y-6">
           {error && (
-            <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               {error}
             </div>
           )}
 
           {activeTab === 'overview' && (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-4">
-                  <div className="text-xs text-slate-500 font-medium">Total Reports</div>
-                  <div className="mt-1 text-2xl font-bold text-white">{reports.length}</div>
-                  <div className="mt-1 text-xs text-slate-500">From API feed</div>
+              {/* Metric cards */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Total reports</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">{reports.length}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">From API feed</p>
                 </div>
-                <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-4">
-                  <div className="text-xs text-slate-500 font-medium">Open (New + Investigating)</div>
-                  <div className="mt-1 text-2xl font-bold text-white">
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Open</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">
                     {reports.filter((r) => ['New', 'Investigating'].includes(r.opsStatus || '')).length}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">Requires action</div>
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">New + Investigating</p>
                 </div>
-                <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-4">
-                  <div className="text-xs text-slate-500 font-medium">API Latency</div>
-                  <div className="mt-1 text-2xl font-bold text-white">
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">API latency</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">
                     {health?.latencyMs != null ? `${health.latencyMs} ms` : '—'}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">Health endpoint</div>
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">Health endpoint</p>
                 </div>
-                <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-4">
-                  <div className="text-xs text-slate-500 font-medium">Endpoints OK</div>
-                  <div className="mt-1 text-2xl font-bold text-white">
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Endpoints OK</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">
                     {probes.filter((p) => p.ok).length}/{probes.length || 1}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">Probes</div>
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">Probes</p>
                 </div>
               </div>
 
-              <Card title="System Health">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {probes.length ? (
-                    probes.map((p) => (
+              <Card title="System health">
+                {probes.length ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {probes.map((p) => (
                       <div
                         key={p.name}
-                        className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800/30 p-3"
+                        className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50/50 px-4 py-3"
                       >
-                        <span className="text-sm font-medium text-slate-300 capitalize">
+                        <span className="text-sm font-medium text-gray-700 capitalize">
                           {p.name.replace(/([A-Z])/g, ' $1').trim()}
                         </span>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500">{p.latencyMs} ms</span>
+                          <span className="text-xs text-gray-500">{p.latencyMs} ms</span>
                           <StatusBadge ok={p.ok} />
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-sm text-slate-500 col-span-2">
-                      Run probes by setting NEXT_PUBLIC_DPAL_API_BASE and refreshing.
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    message="No probes run yet"
+                    submessage="Connect an API in API & tools and click Refresh to run health checks."
+                  />
+                )}
               </Card>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                <Card title="Reports by Status">
+              {/* Reports filter */}
+              {reports.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Filter by status:</label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-google-blue focus:outline-none focus:ring-1 focus:ring-google-blue"
+                  >
+                    <option value="">All</option>
+                    {Array.from(new Set(reports.map((r) => r.opsStatus || 'New'))).map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  {statusFilter && (
+                    <span className="text-xs text-gray-500">
+                      Showing {filteredReports.length} of {reports.length}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card title="Reports by status">
                   {byStatus.length ? (
                     <div className="h-[240px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -325,7 +469,7 @@ export default function MasterEnterpriseDashboard() {
                             label={({ name, value }) => `${name}: ${value}`}
                           >
                             {byStatus.map((_, i) => (
-                              <Cell key={i} fill={STATUS_COLORS[byStatus[i].name] || '#64748b'} />
+                              <Cell key={i} fill={STATUS_COLORS[byStatus[i].name] || '#5f6368'} />
                             ))}
                           </Pie>
                           <Tooltip />
@@ -333,62 +477,64 @@ export default function MasterEnterpriseDashboard() {
                       </ResponsiveContainer>
                     </div>
                   ) : (
-                    <div className="h-[200px] flex items-center justify-center text-slate-500 text-sm">
-                      No report data yet
-                    </div>
+                    <EmptyState
+                      message="No report data yet"
+                      submessage="Connect your API and refresh to load reports."
+                    />
                   )}
                 </Card>
-                <Card title="Reports by Severity">
+                <Card title="Reports by severity">
                   {bySeverity.length ? (
                     <div className="h-[240px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={bySeverity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                          <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                          <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6b7280' }} />
+                          <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} />
                           <Tooltip
                             contentStyle={{
                               borderRadius: 8,
-                              border: '1px solid #334155',
-                              background: '#1e293b',
+                              border: '1px solid #e5e7eb',
+                              background: '#fff',
                               fontSize: 12,
                             }}
                           />
-                          <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="value" fill="#1a73e8" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   ) : (
-                    <div className="h-[200px] flex items-center justify-center text-slate-500 text-sm">
-                      No report data yet
-                    </div>
+                    <EmptyState
+                      message="No report data yet"
+                      submessage="Connect your API and refresh to load reports."
+                    />
                   )}
                 </Card>
               </div>
 
               {trendData.length > 0 && (
-                <Card title="Report intake trend (by date)">
+                <Card title="Report intake trend (last 14 days)">
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={trendData} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                        <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} />
+                        <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} />
                         <Tooltip
                           contentStyle={{
                             borderRadius: 8,
-                            border: '1px solid #334155',
-                            background: '#1e293b',
+                            border: '1px solid #e5e7eb',
+                            background: '#fff',
                             fontSize: 12,
                           }}
                         />
                         <Line
                           type="monotone"
                           dataKey="reports"
-                          stroke="#6366f1"
+                          stroke="#1a73e8"
                           strokeWidth={2}
                           dot={false}
-                          activeDot={{ r: 4, fill: '#6366f1' }}
+                          activeDot={{ r: 4, fill: '#1a73e8' }}
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -400,38 +546,38 @@ export default function MasterEnterpriseDashboard() {
 
           {activeTab === 'quality' && (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-4">
-                  <div className="text-xs text-slate-500 font-medium">Data completeness</div>
-                  <div className="mt-1 text-2xl font-bold text-white">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Data completeness</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">
                     {qualityMetrics.total ? `${qualityMetrics.pctComplete}%` : '—'}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">Title + location + description</div>
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">Title + location + description</p>
                 </div>
-                <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-4">
-                  <div className="text-xs text-slate-500 font-medium">With title</div>
-                  <div className="mt-1 text-2xl font-bold text-white">
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">With title</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">
                     {qualityMetrics.withTitle}/{qualityMetrics.total || 0}
-                  </div>
+                  </p>
                 </div>
-                <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-4">
-                  <div className="text-xs text-slate-500 font-medium">With location</div>
-                  <div className="mt-1 text-2xl font-bold text-white">
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">With location</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">
                     {qualityMetrics.withLocation}/{qualityMetrics.total || 0}
-                  </div>
+                  </p>
                 </div>
-                <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-4">
-                  <div className="text-xs text-slate-500 font-medium">Incomplete records</div>
-                  <div className="mt-1 text-2xl font-bold text-amber-400">
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Incomplete</p>
+                  <p className="mt-1 text-2xl font-semibold text-amber-600">
                     {qualityMetrics.incomplete}
-                  </div>
+                  </p>
                 </div>
               </div>
-              <Card title="Quality rules (from live data)">
-                <ul className="space-y-2 text-sm text-slate-300">
+              <Card title="Quality rules">
+                <ul className="space-y-2 text-sm text-gray-600">
                   <li>• Reports with missing title, location, or description are flagged as incomplete.</li>
                   <li>• Completeness % = (fields present) / (3 × total reports).</li>
-                  <li>• All metrics above are computed from the current reports feed.</li>
+                  <li>• All metrics are computed from the current reports feed.</li>
                 </ul>
               </Card>
             </>
@@ -439,23 +585,23 @@ export default function MasterEnterpriseDashboard() {
 
           {activeTab === 'sites' && (
             <>
-              <Card title="Sites / tenants (from report entity data)">
+              <Card title="Sites / tenants">
                 {sitesFromReports.length ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-slate-700 text-left text-slate-400">
-                          <th className="pb-2 pr-4 font-semibold">Site / Entity</th>
-                          <th className="pb-2 pr-4 font-semibold">Report count</th>
-                          <th className="pb-2 font-semibold">Last activity</th>
+                        <tr className="border-b border-gray-200 text-left text-gray-500">
+                          <th className="pb-3 pr-4 font-medium">Site / Entity</th>
+                          <th className="pb-3 pr-4 font-medium">Report count</th>
+                          <th className="pb-3 font-medium">Last activity</th>
                         </tr>
                       </thead>
                       <tbody>
                         {sitesFromReports.map((s) => (
-                          <tr key={s.name} className="border-b border-slate-700/50">
-                            <td className="py-3 pr-4 font-medium text-slate-200">{s.name}</td>
-                            <td className="py-3 pr-4 text-slate-300">{s.count}</td>
-                            <td className="py-3 text-slate-500">
+                          <tr key={s.name} className="border-b border-gray-100">
+                            <td className="py-3 pr-4 font-medium text-gray-900">{s.name}</td>
+                            <td className="py-3 pr-4 text-gray-600">{s.count}</td>
+                            <td className="py-3 text-gray-500">
                               {s.lastSeen ? new Date(s.lastSeen).toLocaleString() : '—'}
                             </td>
                           </tr>
@@ -464,19 +610,20 @@ export default function MasterEnterpriseDashboard() {
                     </table>
                   </div>
                 ) : (
-                  <div className="py-8 text-center text-slate-500 text-sm">
-                    No entity/site data in reports. Ensure the API returns entityName or entityType.
-                  </div>
+                  <EmptyState
+                    message="No site data yet"
+                    submessage="Ensure the API returns entityName or entityType on reports."
+                  />
                 )}
               </Card>
               <Card title="Platform status">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800/30 p-3">
-                    <span className="text-sm font-medium text-slate-300">Nexus API (DPAL backend)</span>
+                  <div className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50/50 px-4 py-3">
+                    <span className="text-sm font-medium text-gray-700">Nexus API (DPAL backend)</span>
                     <StatusBadge ok={health?.ok ?? false} />
                   </div>
-                  <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800/30 p-3">
-                    <span className="text-sm font-medium text-slate-300">Reports feed</span>
+                  <div className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50/50 px-4 py-3">
+                    <span className="text-sm font-medium text-gray-700">Reports feed</span>
                     <StatusBadge ok={probes.find((p) => p.name === 'reportsFeed')?.ok ?? false} />
                   </div>
                 </div>
@@ -488,4 +635,3 @@ export default function MasterEnterpriseDashboard() {
     </div>
   );
 }
-
