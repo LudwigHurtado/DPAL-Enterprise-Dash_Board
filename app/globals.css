@@ -3,26 +3,22 @@
 @tailwind utilities;
 
 :root {
-  --color-surface: #ffffff;
-  --color-surface-elevated: #ffffff;
-  --color-border: #dadce0;
-  --color-border-subtle: #e8eaed;
-  --color-text: #202124;
-  --color-text-secondary: #5f6368;
-  --color-text-tertiary: #80868b;
-  --color-primary: #1a73e8;
-  --color-primary-hover: #1765cc;
-  --color-success: #1e8e3e;
-  --color-warning: #f29900;
-  --color-error: #d93025;
-  --shadow-sm: 0 1px 2px 0 rgb(60 64 67 / 30%), 0 1px 3px 1px rgb(60 64 67 / 15%);
-  --shadow-md: 0 1px 3px 0 rgb(60 64 67 / 30%), 0 4px 8px 3px rgb(60 64 67 / 15%);
-  --radius: 8px;
-  --radius-lg: 12px;
+  --g-surface: #ffffff;
+  --g-surface-2: #f1f3f4;
+  --g-border: #dadce0;
+  --g-divider: #e8eaed;
+  --g-text: #202124;
+  --g-text-secondary: #5f6368;
+  --g-text-tertiary: #80868b;
+  --g-blue: #1a73e8;
+  --g-blue-hover: #1557b0;
+  --g-green: #1e8e3e;
+  --g-red: #d93025;
+  --g-radius: 8px;
+  --g-elevation-1: 0 1px 2px 0 rgb(60 64 67 / 30%), 0 1px 3px 1px rgb(60 64 67 / 15%);
 }
 
-html,
-body {
+html, body {
   height: 100%;
   margin: 0;
   -webkit-font-smoothing: antialiased;
@@ -30,8 +26,10 @@ body {
 }
 
 body {
-  font-family: 'Roboto', system-ui, -apple-system, sans-serif;
-  color: var(--color-text);
-  background: #f8f9fa;
+  font-family: 'Roboto', system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--g-text);
+  background: var(--g-surface-2);
+  letter-spacing: 0.01em;
 }
 

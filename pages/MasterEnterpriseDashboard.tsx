@@ -48,12 +48,12 @@ function Card({
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-gray-200 bg-white shadow-sm ${className}`}>
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-        <h3 className="text-sm font-medium text-gray-800">{title}</h3>
+    <div className={`rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] shadow-g1 ${className}`}>
+      <div className="flex items-center justify-between border-b border-[var(--g-divider)] px-6 py-4">
+        <h2 className="text-[15px] font-normal text-[var(--g-text)]">{title}</h2>
         {right}
       </div>
-      <div className="p-5">{children}</div>
+      <div className="p-6">{children}</div>
     </div>
   );
 }
@@ -61,11 +61,11 @@ function Card({
 function StatusBadge({ ok, label }: { ok: boolean; label?: string }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-        ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] font-medium ${
+        ok ? 'bg-[#e6f4ea] text-[var(--g-green)]' : 'bg-[#fce8e6] text-[var(--g-red)]'
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? 'bg-green-500' : 'bg-red-500'}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${ok ? 'bg-[var(--g-green)]' : 'bg-[var(--g-red)]'}`} />
       {label ?? (ok ? 'Healthy' : 'Down')}
     </span>
   );
@@ -73,14 +73,14 @@ function StatusBadge({ ok, label }: { ok: boolean; label?: string }) {
 
 function EmptyState({ message, submessage }: { message: string; submessage?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400">
-        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--g-divider)] text-[var(--g-text3)]">
+        <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
         </svg>
       </div>
-      <p className="text-sm font-medium text-gray-700">{message}</p>
-      {submessage && <p className="mt-1 text-xs text-gray-500">{submessage}</p>}
+      <p className="text-[14px] font-normal text-[var(--g-text)]">{message}</p>
+      {submessage && <p className="mt-1 text-[12px] text-[var(--g-text2)]">{submessage}</p>}
     </div>
   );
 }
@@ -98,21 +98,15 @@ export default function MasterEnterpriseDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [probesLoading, setProbesLoading] = useState(false);
 
   const effectiveBase = apiBaseOverride || getApiBase();
+  const configSource = apiBaseOverride ? 'browser' : (getApiBase() ? 'env' : null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setApiBaseOverride(saved);
-        setApiBaseInput(saved);
-      }
-    }
-  }, []);
-
-  const refresh = useCallback(async () => {
-    const base = effectiveBase;
+  const refresh = useCallback(async (overrideBase?: string) => {
+    const base = overrideBase ?? effectiveBase;
     setApiBase(base);
     setError(null);
     setLoading(true);
@@ -135,27 +129,93 @@ export default function MasterEnterpriseDashboard() {
   }, [effectiveBase]);
 
   useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 60_000);
+    if (typeof window === 'undefined') return;
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      setApiBaseOverride(saved);
+      setApiBaseInput(saved);
+      refresh(saved);
+    } else {
+      const envBase = getApiBase();
+      if (envBase) refresh(envBase);
+      else setSettingsOpen(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!effectiveBase) return;
+    const interval = setInterval(() => refresh(), 60_000);
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [effectiveBase, refresh]);
 
   const connectApi = () => {
     const url = apiBaseInput.trim().replace(/\/$/, '');
     if (url) {
       setApiBaseOverride(url);
+      setTestResult(null);
       if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, url);
       setSettingsOpen(false);
-      refresh();
+      refresh(url);
+    }
+  };
+
+  const testConnection = async () => {
+    const url = apiBaseInput.trim().replace(/\/$/, '');
+    if (!url) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await checkHealth(url);
+      setTestResult(
+        res.ok
+          ? { ok: true, message: `Connection OK (${res.status} in ${res.latencyMs} ms)` }
+          : { ok: false, message: `HTTP ${res.status} in ${res.latencyMs} ms` }
+      );
+    } catch (e) {
+      setTestResult({ ok: false, message: e instanceof Error ? e.message : 'Connection failed' });
+    } finally {
+      setTesting(false);
     }
   };
 
   const clearApiOverride = () => {
     setApiBaseOverride('');
-    setApiBaseInput('');
+    setApiBaseInput(getApiBase());
+    setTestResult(null);
     if (typeof window !== 'undefined') localStorage.removeItem(STORAGE_KEY);
     setSettingsOpen(false);
-    refresh();
+    refresh(getApiBase());
+  };
+
+  const runProbesNow = async () => {
+    if (!effectiveBase) return;
+    setProbesLoading(true);
+    try {
+      const res = await runProbes(effectiveBase);
+      setProbes(res);
+      const healthRes = await checkHealth(effectiveBase);
+      setHealth(healthRes);
+      setLastSync(new Date());
+    } finally {
+      setProbesLoading(false);
+    }
+  };
+
+  const exportCsv = () => {
+    const headers = ['reportId', 'title', 'description', 'severity', 'opsStatus', 'location', 'entityName', 'createdAt', 'updatedAt'];
+    const row = (r: ReportItem) =>
+      headers.map((h) => {
+        const v = (r as Record<string, unknown>)[h];
+        const s = typeof v === 'string' ? v.replace(/"/g, '""') : (v ?? '');
+        return `"${s}"`;
+      }).join(',');
+    const csv = [headers.join(','), ...reports.map(row)].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `dpal-reports-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
   };
 
   const filteredReports = React.useMemo(() => {
@@ -246,116 +306,124 @@ export default function MasterEnterpriseDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans">
-      {/* Top bar – Google-style */}
-      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white shadow-sm">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-google-blue text-white font-bold">
-                D
-              </div>
-              <div>
-                <h1 className="text-lg font-medium text-gray-900">
-                  DPAL Master Enterprise Dashboard
-                </h1>
-                <p className="text-xs text-gray-500">
-                  {effectiveBase ? 'Connected' : 'No API configured'}
-                  {lastSync && ` · Last sync ${lastSync.toLocaleTimeString()}`}
-                </p>
-              </div>
+    <div className="min-h-screen bg-[var(--g-surface2)] font-sans text-[14px]">
+      <header className="sticky top-0 z-30 border-b border-[var(--g-border)] bg-[var(--g-surface)]">
+        <div className="mx-auto flex h-14 max-w-[1280px] items-center justify-between gap-4 px-6">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[var(--g-blue)] text-[12px] font-medium text-white">
+              D
             </div>
-            <div className="flex items-center gap-2">
-              {effectiveBase ? (
-                <StatusBadge ok={health?.ok ?? false} label={health?.ok ? 'API up' : 'API down'} />
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setSettingsOpen((o) => !o)}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-              >
-                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                API & tools
-              </button>
-              <button
-                type="button"
-                onClick={() => refresh()}
-                disabled={loading}
-                className="inline-flex items-center gap-2 rounded-lg bg-google-blue px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
-              >
-                {loading ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Refreshing…
-                  </>
-                ) : (
-                  <>
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Refresh
-                  </>
-                )}
-              </button>
+            <div className="min-w-0">
+              <h1 className="truncate text-[22px] font-normal tracking-tight text-[var(--g-text)]">
+                DPAL Enterprise
+              </h1>
+              <p className="text-[12px] text-[var(--g-text2)]">
+                {effectiveBase ? 'Connected' : 'No API configured'}
+                {lastSync && ` · Updated ${lastSync.toLocaleTimeString()}`}
+              </p>
             </div>
           </div>
-
-          {/* API & tools panel */}
-          {settingsOpen && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <h3 className="mb-3 text-sm font-medium text-gray-800">API configuration</h3>
-              <p className="mb-3 text-xs text-gray-500">
-                Enter your DPAL API base URL (e.g. https://your-api.up.railway.app). You can also set{' '}
-                <code className="rounded bg-gray-200 px-1">NEXT_PUBLIC_DPAL_API_BASE</code> in Vercel or .env.
+          <div className="flex flex-shrink-0 items-center gap-1">
+            {effectiveBase && (
+              <StatusBadge ok={health?.ok ?? false} label={health?.ok ? 'API up' : 'API down'} />
+            )}
+            <button
+              type="button"
+              onClick={() => setSettingsOpen((o) => !o)}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--g-text2)] hover:bg-[var(--g-surface2)] hover:text-[var(--g-text)]"
+              title="Settings"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94a.75.75 0 01.596 0cA2.251 2.251 0 0113.5 4.898c.848.128 1.705.264 2.55.364a.75.75 0 01.63 1.408A21.474 21.474 0 0112 9c-2.264 0-4.597.032-6.963.096a.75.75 0 01-.63-1.408 20.902 20.902 0 002.55-.364A2.251 2.251 0 019.594 3.94z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => refresh()}
+              disabled={loading}
+              className="flex h-9 items-center gap-1.5 rounded-[var(--g-radius)] bg-[var(--g-blue)] px-4 text-[13px] font-medium text-white hover:bg-[var(--g-blue-hover)] disabled:opacity-60"
+            >
+              {loading ? (
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+              )}
+              {loading ? 'Refreshing' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+        {settingsOpen && (
+          <div className="border-t border-[var(--g-divider)] bg-[var(--g-surface)] px-6 py-5">
+            <p className="mb-1 text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">API configuration</p>
+            {effectiveBase && (
+              <p className="mb-3 text-[12px] text-[var(--g-text2)]">
+                Current: <span className="font-mono text-[var(--g-text)]">{effectiveBase}</span>
+                <span className="ml-1">({configSource === 'browser' ? 'this device' : 'server env'})</span>
               </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="url"
-                  value={apiBaseInput}
-                  onChange={(e) => setApiBaseInput(e.target.value)}
-                  placeholder="https://your-dpal-api.example.com"
-                  className="min-w-[280px] rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-google-blue focus:outline-none focus:ring-1 focus:ring-google-blue"
-                />
+            )}
+            <p className="mb-4 text-[13px] text-[var(--g-text2)]">
+              Base URL for your DPAL API. In Vercel: Settings → Environment Variables → <code className="rounded bg-[var(--g-surface2)] px-1 py-0.5 text-[12px]">NEXT_PUBLIC_DPAL_API_BASE</code>.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="url"
+                value={apiBaseInput}
+                onChange={(e) => { setApiBaseInput(e.target.value); setTestResult(null); }}
+                placeholder="https://your-api.example.com"
+                className="h-9 min-w-[280px] rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] px-3 text-[14px] text-[var(--g-text)] placeholder:text-[var(--g-text3)] focus:border-[var(--g-blue)] focus:outline-none focus:ring-1 focus:ring-[var(--g-blue)]"
+              />
+              <button
+                type="button"
+                onClick={testConnection}
+                disabled={testing || !apiBaseInput.trim()}
+                className="h-9 rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] px-3 text-[13px] font-medium text-[var(--g-text)] hover:bg-[var(--g-surface2)] disabled:opacity-50"
+              >
+                {testing ? 'Testing…' : 'Test'}
+              </button>
+              <button
+                type="button"
+                onClick={connectApi}
+                className="h-9 rounded-[var(--g-radius)] bg-[var(--g-blue)] px-4 text-[13px] font-medium text-white hover:bg-[var(--g-blue-hover)]"
+              >
+                Connect
+              </button>
+              {apiBaseOverride && (
                 <button
                   type="button"
-                  onClick={connectApi}
-                  className="rounded-lg bg-google-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  onClick={clearApiOverride}
+                  className="h-9 rounded-[var(--g-radius)] px-3 text-[13px] font-medium text-[var(--g-text2)] hover:bg-[var(--g-surface2)] hover:text-[var(--g-text)]"
                 >
-                  Connect
+                  Clear
                 </button>
-                {apiBaseOverride ? (
-                  <button
-                    type="button"
-                    onClick={clearApiOverride}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
-                  >
-                    Clear override
-                  </button>
-                ) : null}
-              </div>
+              )}
             </div>
-          )}
-        </div>
+            {testResult && (
+              <p className={`mt-3 text-[13px] ${testResult.ok ? 'text-[var(--g-green)]' : 'text-[var(--g-red)]'}`}>
+                {testResult.ok ? '✓ ' : '✗ '}{testResult.message}
+              </p>
+            )}
+          </div>
+        )}
       </header>
 
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <aside className="hidden w-52 flex-shrink-0 lg:block">
-          <nav className="sticky top-28 space-y-0.5 rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
+      <div className="mx-auto flex max-w-[1280px] gap-8 px-6 py-8">
+        <aside className="hidden w-56 flex-shrink-0 lg:block">
+          <nav className="sticky top-24 space-y-0.5 rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-1 shadow-g1">
             {navItems.map((item) => (
               <button
                 type="button"
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                className={`w-full rounded-md px-3 py-2.5 text-left text-[14px] font-normal ${
                   activeTab === item.id
-                    ? 'bg-google-blue/10 text-google-blue'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    ? 'bg-[#e8f0fe] text-[var(--g-blue)]'
+                    : 'text-[var(--g-text2)] hover:bg-[var(--g-surface2)] hover:text-[var(--g-text)]'
                 }`}
               >
                 {item.label}
@@ -364,58 +432,71 @@ export default function MasterEnterpriseDashboard() {
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 space-y-6">
+        <main className="min-w-0 flex-1 space-y-8">
           {error && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="rounded-[var(--g-radius)] border border-[#f9ab00] bg-[#fef7e0] px-4 py-3 text-[13px] text-[#b36b00]">
               {error}
             </div>
           )}
 
           {activeTab === 'overview' && (
             <>
-              {/* Metric cards */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Total reports</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-900">{reports.length}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">From API feed</p>
+                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
+                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">Total reports</p>
+                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">{reports.length}</p>
+                  <p className="mt-0.5 text-[12px] text-[var(--g-text2)]">From API feed</p>
                 </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Open</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-900">
+                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
+                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">Open</p>
+                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
                     {reports.filter((r) => ['New', 'Investigating'].includes(r.opsStatus || '')).length}
                   </p>
-                  <p className="mt-0.5 text-xs text-gray-500">New + Investigating</p>
+                  <p className="mt-0.5 text-[12px] text-[var(--g-text2)]">New + Investigating</p>
                 </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">API latency</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-900">
+                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
+                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">API latency</p>
+                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
                     {health?.latencyMs != null ? `${health.latencyMs} ms` : '—'}
                   </p>
-                  <p className="mt-0.5 text-xs text-gray-500">Health endpoint</p>
+                  <p className="mt-0.5 text-[12px] text-[var(--g-text2)]">Health endpoint</p>
                 </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Endpoints OK</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-900">
+                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
+                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">Endpoints OK</p>
+                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
                     {probes.filter((p) => p.ok).length}/{probes.length || 1}
                   </p>
-                  <p className="mt-0.5 text-xs text-gray-500">Probes</p>
+                  <p className="mt-0.5 text-[12px] text-[var(--g-text2)]">Probes</p>
                 </div>
               </div>
 
-              <Card title="System health">
+              <Card
+                title="System health"
+                right={
+                  effectiveBase ? (
+                    <button
+                      type="button"
+                      onClick={runProbesNow}
+                      disabled={probesLoading}
+                      className="rounded-md border border-[var(--g-border)] bg-[var(--g-surface)] px-3 py-1.5 text-[12px] font-medium text-[var(--g-text)] hover:bg-[var(--g-surface2)] disabled:opacity-50"
+                    >
+                      {probesLoading ? 'Running…' : 'Run probes'}
+                    </button>
+                  ) : null
+                }
+              >
                 {probes.length ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {probes.map((p) => (
                       <div
                         key={p.name}
-                        className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50/50 px-4 py-3"
+                        className="flex items-center justify-between rounded-md border border-[var(--g-divider)] bg-[var(--g-surface2)] px-4 py-3"
                       >
-                        <span className="text-sm font-medium text-gray-700 capitalize">
+                        <span className="text-[14px] font-normal text-[var(--g-text)] capitalize">
                           {p.name.replace(/([A-Z])/g, ' $1').trim()}
                         </span>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">{p.latencyMs} ms</span>
+                          <span className="text-[12px] text-[var(--g-text2)]">{p.latencyMs} ms</span>
                           <StatusBadge ok={p.ok} />
                         </div>
                       </div>
@@ -424,30 +505,85 @@ export default function MasterEnterpriseDashboard() {
                 ) : (
                   <EmptyState
                     message="No probes run yet"
-                    submessage="Connect an API in API & tools and click Refresh to run health checks."
+                    submessage="Connect an API and click Refresh or Run probes."
                   />
                 )}
               </Card>
 
-              {/* Reports filter */}
+              <Card
+                title="Recent reports"
+                right={
+                  reports.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={exportCsv}
+                      className="rounded-md px-3 py-1.5 text-[12px] font-medium text-[var(--g-blue)] hover:bg-[#e8f0fe]"
+                    >
+                      Export CSV
+                    </button>
+                  ) : null
+                }
+              >
+                {reports.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[14px]">
+                      <thead>
+                        <tr className="border-b border-[var(--g-divider)] text-left text-[12px] font-medium text-[var(--g-text2)]">
+                          <th className="pb-3 pr-4">Title</th>
+                          <th className="pb-3 pr-4">Status</th>
+                          <th className="pb-3 pr-4">Severity</th>
+                          <th className="pb-3">Updated</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(statusFilter ? filteredReports : reports).slice(0, 20).map((r) => (
+                          <tr key={r.reportId} className="border-b border-[var(--g-divider)] hover:bg-[var(--g-surface2)]">
+                            <td className="max-w-[240px] truncate py-3 pr-4 font-normal text-[var(--g-text)]" title={r.title}>
+                              {r.title || '—'}
+                            </td>
+                            <td className="py-3 pr-4">
+                              <span className="rounded-full bg-[var(--g-surface2)] px-2 py-0.5 text-[12px] font-medium text-[var(--g-text2)]">
+                                {r.opsStatus || 'New'}
+                              </span>
+                            </td>
+                            <td className="py-3 pr-4 text-[var(--g-text2)]">{r.severity || '—'}</td>
+                            <td className="py-3 text-[var(--g-text2)]">
+                              {r.updatedAt || r.createdAt
+                                ? new Date(r.updatedAt || r.createdAt!).toLocaleDateString()
+                                : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <p className="mt-3 text-[12px] text-[var(--g-text2)]">
+                      Showing up to 20 of {statusFilter ? filteredReports.length : reports.length} reports.
+                    </p>
+                  </div>
+                ) : (
+                  <EmptyState
+                    message="No reports yet"
+                    submessage="Connect your API and refresh to load the reports feed."
+                  />
+                )}
+              </Card>
+
               {reports.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">Filter by status:</label>
+                  <label className="text-[13px] font-normal text-[var(--g-text2)]">Filter by status</label>
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-google-blue focus:outline-none focus:ring-1 focus:ring-google-blue"
+                    className="h-9 rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] px-3 text-[13px] text-[var(--g-text)] focus:border-[var(--g-blue)] focus:outline-none focus:ring-1 focus:ring-[var(--g-blue)]"
                   >
                     <option value="">All</option>
                     {Array.from(new Set(reports.map((r) => r.opsStatus || 'New'))).map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
+                      <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
                   {statusFilter && (
-                    <span className="text-xs text-gray-500">
-                      Showing {filteredReports.length} of {reports.length}
+                    <span className="text-[12px] text-[var(--g-text2)]">
+                      {filteredReports.length} of {reports.length}
                     </span>
                   )}
                 </div>
@@ -472,15 +608,12 @@ export default function MasterEnterpriseDashboard() {
                               <Cell key={i} fill={STATUS_COLORS[byStatus[i].name] || '#5f6368'} />
                             ))}
                           </Pie>
-                          <Tooltip />
+                          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--g-divider)', background: 'var(--g-surface)', fontSize: 12 }} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
                   ) : (
-                    <EmptyState
-                      message="No report data yet"
-                      submessage="Connect your API and refresh to load reports."
-                    />
+                    <EmptyState message="No report data yet" submessage="Connect your API and refresh to load reports." />
                   )}
                 </Card>
                 <Card title="Reports by severity">
@@ -488,26 +621,16 @@ export default function MasterEnterpriseDashboard() {
                     <div className="h-[240px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={bySeverity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6b7280' }} />
-                          <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} />
-                          <Tooltip
-                            contentStyle={{
-                              borderRadius: 8,
-                              border: '1px solid #e5e7eb',
-                              background: '#fff',
-                              fontSize: 12,
-                            }}
-                          />
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--g-divider)" />
+                          <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'var(--g-text2)' }} />
+                          <YAxis tick={{ fontSize: 12, fill: 'var(--g-text2)' }} />
+                          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--g-divider)', background: 'var(--g-surface)', fontSize: 12 }} />
                           <Bar dataKey="value" fill="#1a73e8" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   ) : (
-                    <EmptyState
-                      message="No report data yet"
-                      submessage="Connect your API and refresh to load reports."
-                    />
+                    <EmptyState message="No report data yet" submessage="Connect your API and refresh to load reports." />
                   )}
                 </Card>
               </div>
@@ -517,25 +640,11 @@ export default function MasterEnterpriseDashboard() {
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={trendData} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} />
-                        <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} />
-                        <Tooltip
-                          contentStyle={{
-                            borderRadius: 8,
-                            border: '1px solid #e5e7eb',
-                            background: '#fff',
-                            fontSize: 12,
-                          }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="reports"
-                          stroke="#1a73e8"
-                          strokeWidth={2}
-                          dot={false}
-                          activeDot={{ r: 4, fill: '#1a73e8' }}
-                        />
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--g-divider)" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--g-text2)' }} />
+                        <YAxis tick={{ fontSize: 12, fill: 'var(--g-text2)' }} />
+                        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--g-divider)', background: 'var(--g-surface)', fontSize: 12 }} />
+                        <Line type="monotone" dataKey="reports" stroke="#1a73e8" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#1a73e8' }} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -547,37 +656,37 @@ export default function MasterEnterpriseDashboard() {
           {activeTab === 'quality' && (
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Data completeness</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-900">
+                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
+                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">Data completeness</p>
+                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
                     {qualityMetrics.total ? `${qualityMetrics.pctComplete}%` : '—'}
                   </p>
-                  <p className="mt-0.5 text-xs text-gray-500">Title + location + description</p>
+                  <p className="mt-0.5 text-[12px] text-[var(--g-text2)]">Title + location + description</p>
                 </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">With title</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-900">
+                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
+                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">With title</p>
+                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
                     {qualityMetrics.withTitle}/{qualityMetrics.total || 0}
                   </p>
                 </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">With location</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-900">
+                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
+                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">With location</p>
+                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
                     {qualityMetrics.withLocation}/{qualityMetrics.total || 0}
                   </p>
                 </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Incomplete</p>
-                  <p className="mt-1 text-2xl font-semibold text-amber-600">
+                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
+                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">Incomplete</p>
+                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[#b36b00]">
                     {qualityMetrics.incomplete}
                   </p>
                 </div>
               </div>
               <Card title="Quality rules">
-                <ul className="space-y-2 text-sm text-gray-600">
-                  <li>• Reports with missing title, location, or description are flagged as incomplete.</li>
-                  <li>• Completeness % = (fields present) / (3 × total reports).</li>
-                  <li>• All metrics are computed from the current reports feed.</li>
+                <ul className="space-y-2 text-[14px] font-normal text-[var(--g-text2)]">
+                  <li>Reports with missing title, location, or description are flagged as incomplete.</li>
+                  <li>Completeness % = (fields present) / (3 × total reports).</li>
+                  <li>All metrics are computed from the current reports feed.</li>
                 </ul>
               </Card>
             </>
@@ -588,20 +697,20 @@ export default function MasterEnterpriseDashboard() {
               <Card title="Sites / tenants">
                 {sitesFromReports.length ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-[14px]">
                       <thead>
-                        <tr className="border-b border-gray-200 text-left text-gray-500">
-                          <th className="pb-3 pr-4 font-medium">Site / Entity</th>
-                          <th className="pb-3 pr-4 font-medium">Report count</th>
-                          <th className="pb-3 font-medium">Last activity</th>
+                        <tr className="border-b border-[var(--g-divider)] text-left text-[12px] font-medium text-[var(--g-text2)]">
+                          <th className="pb-3 pr-4">Site / Entity</th>
+                          <th className="pb-3 pr-4">Report count</th>
+                          <th className="pb-3">Last activity</th>
                         </tr>
                       </thead>
                       <tbody>
                         {sitesFromReports.map((s) => (
-                          <tr key={s.name} className="border-b border-gray-100">
-                            <td className="py-3 pr-4 font-medium text-gray-900">{s.name}</td>
-                            <td className="py-3 pr-4 text-gray-600">{s.count}</td>
-                            <td className="py-3 text-gray-500">
+                          <tr key={s.name} className="border-b border-[var(--g-divider)] hover:bg-[var(--g-surface2)]">
+                            <td className="py-3 pr-4 font-normal text-[var(--g-text)]">{s.name}</td>
+                            <td className="py-3 pr-4 text-[var(--g-text2)]">{s.count}</td>
+                            <td className="py-3 text-[var(--g-text2)]">
                               {s.lastSeen ? new Date(s.lastSeen).toLocaleString() : '—'}
                             </td>
                           </tr>
@@ -617,13 +726,13 @@ export default function MasterEnterpriseDashboard() {
                 )}
               </Card>
               <Card title="Platform status">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50/50 px-4 py-3">
-                    <span className="text-sm font-medium text-gray-700">Nexus API (DPAL backend)</span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between rounded-md border border-[var(--g-divider)] bg-[var(--g-surface2)] px-4 py-3">
+                    <span className="text-[14px] font-normal text-[var(--g-text)]">Nexus API (DPAL backend)</span>
                     <StatusBadge ok={health?.ok ?? false} />
                   </div>
-                  <div className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50/50 px-4 py-3">
-                    <span className="text-sm font-medium text-gray-700">Reports feed</span>
+                  <div className="flex items-center justify-between rounded-md border border-[var(--g-divider)] bg-[var(--g-surface2)] px-4 py-3">
+                    <span className="text-[14px] font-normal text-[var(--g-text)]">Reports feed</span>
                     <StatusBadge ok={probes.find((p) => p.name === 'reportsFeed')?.ok ?? false} />
                   </div>
                 </div>
