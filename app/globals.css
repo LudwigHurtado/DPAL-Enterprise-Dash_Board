@@ -2,20 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ========== Material Design 3 (Google) tokens ========== */
 :root {
-  --g-surface: #ffffff;
-  --g-surface-2: #f1f3f4;
-  --g-border: #dadce0;
-  --g-divider: #e8eaed;
-  --g-text: #202124;
-  --g-text-secondary: #5f6368;
-  --g-text-tertiary: #80868b;
-  --g-blue: #1a73e8;
+  /* Surfaces */
+  --md-sys-surface: #fefbff;
+  --md-sys-surface-dim: #ded8e1;
+  --md-sys-surface-container: #f5eff7;
+  --md-sys-surface-container-high: #efe9f1;
+  --md-sys-surface-container-highest: #e9e3ec;
+  --md-sys-on-surface: #1d1b20;
+  --md-sys-on-surface-variant: #49454f;
+  --md-sys-outline: #79747e;
+  --md-sys-outline-variant: #cac4d0;
+
+  /* Primary (blue) */
+  --md-sys-primary: #1a73e8;
+  --md-sys-primary-container: #d6e3ff;
+  --md-sys-on-primary: #ffffff;
+  --md-sys-on-primary-container: #001b3f;
+
+  /* Secondary / Tonal */
+  --md-sys-secondary-container: #e8def8;
+  --md-sys-on-secondary-container: #1d192b;
+
+  /* Tertiary */
+  --md-sys-tertiary-container: #ffd8e4;
+  --md-sys-on-tertiary-container: #31111d;
+
+  /* Error & Success */
+  --md-sys-error: #ba1a1a;
+  --md-sys-error-container: #ffdad6;
+  --md-sys-on-error: #ffffff;
+  --md-sys-on-error-container: #410002;
+  --md-sys-success: #1e8e3e;
+  --md-sys-success-container: #c8f0d0;
+  --md-sys-on-success-container: #00210b;
+
+  /* Inverse (for snackbar) */
+  --md-sys-inverse-surface: #313033;
+  --md-sys-inverse-on-surface: #f4eff4;
+
+  /* Legacy / compatibility */
+  --g-surface: var(--md-sys-surface);
+  --g-surface-2: var(--md-sys-surface-container);
+  --g-surface-3: var(--md-sys-surface-container-high);
+  --g-border: var(--md-sys-outline-variant);
+  --g-divider: var(--md-sys-outline-variant);
+  --g-text: var(--md-sys-on-surface);
+  --g-text-secondary: var(--md-sys-on-surface-variant);
+  --g-text-tertiary: var(--md-sys-outline);
+  --g-blue: var(--md-sys-primary);
   --g-blue-hover: #1557b0;
-  --g-green: #1e8e3e;
-  --g-red: #d93025;
-  --g-radius: 8px;
-  --g-elevation-1: 0 1px 2px 0 rgb(60 64 67 / 30%), 0 1px 3px 1px rgb(60 64 67 / 15%);
+  --g-blue-bg: var(--md-sys-primary-container);
+  --g-green: var(--md-sys-success);
+  --g-green-bg: var(--md-sys-success-container);
+  --g-red: var(--md-sys-error);
+  --g-red-bg: var(--md-sys-error-container);
+  --g-amber: #b45309;
+  --g-amber-bg: #fffbeb;
+
+  /* Shape */
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-full: 9999px;
+
+  /* Elevation (Material 3) */
+  --md-sys-elevation-0: none;
+  --md-sys-elevation-1: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 3px 1px rgb(0 0 0 / 0.05);
+  --md-sys-elevation-2: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 2px 6px 2px rgb(0 0 0 / 0.08);
+  --md-sys-elevation-3: 0 4px 8px 3px rgb(0 0 0 / 0.07), 0 1px 3px 0 rgb(0 0 0 / 0.05);
+  --md-sys-elevation-4: 0 6px 10px 4px rgb(0 0 0 / 0.06), 0 2px 3px 0 rgb(0 0 0 / 0.05);
+  --md-sys-elevation-5: 0 8px 12px 6px rgb(0 0 0 / 0.08), 0 4px 4px 0 rgb(0 0 0 / 0.05);
+
+  --g-radius: var(--md-sys-shape-corner-medium);
+  --g-radius-sm: var(--md-sys-shape-corner-small);
+  --g-elevation-1: var(--md-sys-elevation-1);
+  --g-elevation-2: var(--md-sys-elevation-2);
+  --g-elevation-card: var(--md-sys-elevation-1);
 }
 
 html, body {
@@ -28,8 +95,189 @@ html, body {
 body {
   font-family: 'Roboto', system-ui, sans-serif;
   font-size: 14px;
-  color: var(--g-text);
-  background: var(--g-surface-2);
+  color: var(--md-sys-on-surface);
+  background: var(--md-sys-surface-container);
   letter-spacing: 0.01em;
 }
 
+/* ========== MD3 Typography scale ========== */
+.md-headline-large {
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 2.5rem;
+  letter-spacing: 0;
+  color: var(--md-sys-on-surface);
+}
+.md-title-large {
+  font-size: 1.375rem;
+  font-weight: 400;
+  line-height: 1.75rem;
+  letter-spacing: 0;
+  color: var(--md-sys-on-surface);
+}
+.md-title-medium {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5rem;
+  letter-spacing: 0.15px;
+  color: var(--md-sys-on-surface);
+}
+.md-body-large {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5rem;
+  letter-spacing: 0.5px;
+  color: var(--md-sys-on-surface);
+}
+.md-body-medium {
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+  letter-spacing: 0.25px;
+  color: var(--md-sys-on-surface-variant);
+}
+.md-label-large {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  letter-spacing: 0.1px;
+  color: var(--md-sys-on-surface);
+}
+.md-label-medium {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1rem;
+  letter-spacing: 0.5px;
+  color: var(--md-sys-on-surface-variant);
+}
+
+/* ========== MD3 Components ========== */
+/* Top app bar */
+.md-top-app-bar {
+  background: var(--md-sys-surface);
+  color: var(--md-sys-on-surface);
+  box-shadow: var(--md-sys-elevation-1);
+  min-height: 64px;
+}
+
+/* Cards – elevated, rounded */
+.md-card {
+  background: var(--md-sys-surface);
+  border-radius: var(--md-sys-shape-corner-medium);
+  box-shadow: var(--md-sys-elevation-1);
+  overflow: hidden;
+}
+.md-card-filled {
+  background: var(--md-sys-surface-container-high);
+  border-radius: var(--md-sys-shape-corner-medium);
+}
+
+/* Buttons – Filled (primary), Tonal (secondary), Outlined */
+.md-button-filled {
+  background: var(--md-sys-primary);
+  color: var(--md-sys-on-primary);
+  border: none;
+  border-radius: var(--md-sys-shape-corner-full);
+  padding: 10px 24px;
+  font: 500 0.875rem/1.25rem 'Roboto', sans-serif;
+  letter-spacing: 0.1px;
+  box-shadow: var(--md-sys-elevation-1);
+  transition: box-shadow 0.2s, background 0.2s;
+}
+.md-button-filled:hover {
+  box-shadow: var(--md-sys-elevation-2);
+  background: #1557b0;
+}
+.md-button-tonal {
+  background: var(--md-sys-primary-container);
+  color: var(--md-sys-on-primary-container);
+  border: none;
+  border-radius: var(--md-sys-shape-corner-full);
+  padding: 10px 24px;
+  font: 500 0.875rem/1.25rem 'Roboto', sans-serif;
+  letter-spacing: 0.1px;
+  transition: background 0.2s;
+}
+.md-button-tonal:hover {
+  background: #b8c9ff;
+}
+.md-button-outlined {
+  background: transparent;
+  color: var(--md-sys-primary);
+  border: 1px solid var(--md-sys-outline-variant);
+  border-radius: var(--md-sys-shape-corner-full);
+  padding: 10px 24px;
+  font: 500 0.875rem/1.25rem 'Roboto', sans-serif;
+  letter-spacing: 0.1px;
+  transition: background 0.2s;
+}
+.md-button-outlined:hover {
+  background: rgba(26, 115, 232, 0.08);
+}
+
+/* Chips (filter chips) */
+.md-chip {
+  border-radius: var(--md-sys-shape-corner-small);
+  padding: 6px 16px;
+  font: 500 0.875rem/1.25rem 'Roboto', sans-serif;
+  background: var(--md-sys-surface-container-high);
+  color: var(--md-sys-on-surface-variant);
+  border: none;
+  transition: background 0.2s;
+}
+.md-chip:hover {
+  background: var(--md-sys-surface-container-highest);
+}
+.md-chip-selected {
+  background: var(--md-sys-primary-container);
+  color: var(--md-sys-on-primary-container);
+}
+
+/* Dashboard panel (card wrapper) */
+.dashboard-panel {
+  background: var(--md-sys-surface);
+  border: 1px solid var(--md-sys-outline-variant);
+  border-radius: var(--md-sys-shape-corner-medium);
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+/* Metric / KPI box */
+.metric-box {
+  background: var(--md-sys-surface);
+  border: 1px solid var(--md-sys-outline-variant);
+  border-radius: var(--md-sys-shape-corner-medium);
+  box-shadow: var(--md-sys-elevation-1);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.metric-box:hover {
+  box-shadow: var(--md-sys-elevation-2);
+  border-color: var(--md-sys-outline);
+}
+
+/* Snackbar */
+.md-snackbar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--md-sys-inverse-surface, #313033);
+  color: var(--md-sys-inverse-on-surface, #f4eff4);
+  padding: 14px 16px;
+  border-radius: var(--md-sys-shape-corner-small);
+  font: 0.875rem/1.25rem 'Roboto', sans-serif;
+  box-shadow: var(--md-sys-elevation-3);
+  z-index: 1000;
+  animation: md-snackbar-in 0.25s ease;
+}
+@keyframes md-snackbar-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* State layer (hover/pressed) */
+.md-state-hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.md-state-hover:hover {
+  background: rgba(0, 0, 0, 0.08);
+}

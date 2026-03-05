@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "DPAL Enterprise Dashboard",
-  description: "HQ and QC controls for DPAL",
+  title: "HQ & QC Dashboard — DPAL Enterprise",
+  description: "HQ and Quality Control mission control for DPAL",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen bg-[#f1f3f4] text-[#202124] font-sans antialiased">{children}</body>
+      <body className="min-h-screen bg-[var(--md-sys-surface-container)] text-[var(--md-sys-on-surface)] font-sans antialiased">{children}</body>
     </html>
   );
 }

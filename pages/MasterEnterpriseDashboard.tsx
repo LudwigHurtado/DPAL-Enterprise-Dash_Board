@@ -40,32 +40,49 @@ function Card({
   title,
   children,
   right,
+  icon,
   className = '',
 }: {
   title: string;
   children: React.ReactNode;
   right?: React.ReactNode;
+  icon?: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={`rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] shadow-g1 ${className}`}>
-      <div className="flex items-center justify-between border-b border-[var(--g-divider)] px-6 py-4">
-        <h2 className="text-[15px] font-normal text-[var(--g-text)]">{title}</h2>
+    <div className={`md-card overflow-hidden ${className}`}>
+      <div className="flex items-center justify-between border-b border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface)] px-4 py-4 sm:px-6">
+        <div className="flex items-center gap-3">
+          {icon && (
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[8px] bg-[var(--md-sys-primary-container)] text-[var(--md-sys-primary)]">
+              {icon}
+            </div>
+          )}
+          <h2 className="md-title-medium">{title}</h2>
+        </div>
         {right}
       </div>
-      <div className="p-6">{children}</div>
+      <div className="bg-[var(--md-sys-surface)] p-4 sm:p-6">{children}</div>
     </div>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="md-label-medium mb-3 uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">
+      {children}
+    </h3>
   );
 }
 
 function StatusBadge({ ok, label }: { ok: boolean; label?: string }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] font-medium ${
-        ok ? 'bg-[#e6f4ea] text-[var(--g-green)]' : 'bg-[#fce8e6] text-[var(--g-red)]'
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 md-label-medium ${
+        ok ? 'border-[var(--md-sys-success)]/30 bg-[var(--md-sys-success-container)] text-[var(--md-sys-success)]' : 'border-[var(--md-sys-error)]/30 bg-[var(--md-sys-error-container)] text-[var(--md-sys-error)]'
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${ok ? 'bg-[var(--g-green)]' : 'bg-[var(--g-red)]'}`} />
+      <span className={`h-2 w-2 rounded-full ${ok ? 'bg-[var(--md-sys-success)]' : 'bg-[var(--md-sys-error)]'}`} />
       {label ?? (ok ? 'Healthy' : 'Down')}
     </span>
   );
@@ -73,14 +90,14 @@ function StatusBadge({ ok, label }: { ok: boolean; label?: string }) {
 
 function EmptyState({ message, submessage }: { message: string; submessage?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--g-divider)] text-[var(--g-text3)]">
+    <div className="flex flex-col items-center justify-center py-12 text-center sm:py-16">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--md-sys-surface-container-high)] text-[var(--md-sys-outline)]">
         <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
         </svg>
       </div>
-      <p className="text-[14px] font-normal text-[var(--g-text)]">{message}</p>
-      {submessage && <p className="mt-1 text-[12px] text-[var(--g-text2)]">{submessage}</p>}
+      <p className="md-body-large text-[var(--md-sys-on-surface)]">{message}</p>
+      {submessage && <p className="md-body-medium mt-1">{submessage}</p>}
     </div>
   );
 }
@@ -101,6 +118,13 @@ export default function MasterEnterpriseDashboard() {
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const [probesLoading, setProbesLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ message: string } | null>(null);
+
+  const showSnackbar = useCallback((message: string) => {
+    setSnackbar({ message });
+    const t = setTimeout(() => setSnackbar(null), 4000);
+    return () => clearTimeout(t);
+  }, []);
 
   const effectiveBase = apiBaseOverride || getApiBase();
   const configSource = apiBaseOverride ? 'browser' : (getApiBase() ? 'env' : null);
@@ -156,6 +180,7 @@ export default function MasterEnterpriseDashboard() {
       if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, url);
       setSettingsOpen(false);
       refresh(url);
+      showSnackbar('API connected');
     }
   };
 
@@ -216,6 +241,7 @@ export default function MasterEnterpriseDashboard() {
     link.download = `dpal-reports-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
+    showSnackbar('CSV exported');
   };
 
   const filteredReports = React.useMemo(() => {
@@ -305,33 +331,55 @@ export default function MasterEnterpriseDashboard() {
     { id: 'sites', label: 'Site Monitoring' },
   ];
 
+  const IconChart = () => (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+    </svg>
+  );
+  const IconHeart = () => (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+    </svg>
+  );
+  const IconDoc = () => (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    </svg>
+  );
+  const IconMap = () => (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+    </svg>
+  );
+
   return (
-    <div className="min-h-screen bg-[var(--g-surface2)] font-sans text-[14px]">
-      <header className="sticky top-0 z-30 border-b border-[var(--g-border)] bg-[var(--g-surface)]">
-        <div className="mx-auto flex h-14 max-w-[1280px] items-center justify-between gap-4 px-6">
+    <div className="min-h-screen bg-[var(--md-sys-surface-container)] font-sans text-[14px]">
+      <header className="md-top-app-bar sticky top-0 z-30 border-b border-[var(--md-sys-outline-variant)]">
+        <div className="mx-auto flex min-h-[64px] max-w-[1280px] items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[var(--g-blue)] text-[12px] font-medium text-white">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[12px] bg-[var(--md-sys-primary)] text-[14px] font-semibold text-[var(--md-sys-on-primary)] shadow-md">
               D
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-[22px] font-normal tracking-tight text-[var(--g-text)]">
-                DPAL Enterprise
+              <h1 className="md-title-large truncate font-medium">
+                HQ & QC Dashboard
               </h1>
-              <p className="text-[12px] text-[var(--g-text2)]">
+              <p className="md-body-medium mt-0.5 truncate">
                 {effectiveBase ? 'Connected' : 'No API configured'}
                 {lastSync && ` · Updated ${lastSync.toLocaleTimeString()}`}
               </p>
             </div>
           </div>
-          <div className="flex flex-shrink-0 items-center gap-1">
+          <div className="flex flex-shrink-0 items-center gap-2">
             {effectiveBase && (
               <StatusBadge ok={health?.ok ?? false} label={health?.ok ? 'API up' : 'API down'} />
             )}
             <button
               type="button"
               onClick={() => setSettingsOpen((o) => !o)}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--g-text2)] hover:bg-[var(--g-surface2)] hover:text-[var(--g-text)]"
-              title="Settings"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--md-sys-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-surface-container-high)] hover:text-[var(--md-sys-on-surface)]"
+              title="API settings"
+              aria-label="API settings"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94a.75.75 0 01.596 0cA2.251 2.251 0 0113.5 4.898c.848.128 1.705.264 2.55.364a.75.75 0 01.63 1.408A21.474 21.474 0 0112 9c-2.264 0-4.597.032-6.963.096a.75.75 0 01-.63-1.408 20.902 20.902 0 002.55-.364A2.251 2.251 0 019.594 3.94z" />
@@ -342,7 +390,7 @@ export default function MasterEnterpriseDashboard() {
               type="button"
               onClick={() => refresh()}
               disabled={loading}
-              className="flex h-9 items-center gap-1.5 rounded-[var(--g-radius)] bg-[var(--g-blue)] px-4 text-[13px] font-medium text-white hover:bg-[var(--g-blue-hover)] disabled:opacity-60"
+              className="md-button-filled flex h-10 items-center gap-2 disabled:opacity-50"
             >
               {loading ? (
                 <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -359,52 +407,39 @@ export default function MasterEnterpriseDashboard() {
           </div>
         </div>
         {settingsOpen && (
-          <div className="border-t border-[var(--g-divider)] bg-[var(--g-surface)] px-6 py-5">
-            <p className="mb-1 text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">API configuration</p>
+          <div className="border-t border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] px-4 py-5 sm:px-6">
+            <p className="md-label-medium mb-3 uppercase tracking-wider">API configuration</p>
             {effectiveBase && (
-              <p className="mb-3 text-[12px] text-[var(--g-text2)]">
-                Current: <span className="font-mono text-[var(--g-text)]">{effectiveBase}</span>
+              <p className="md-body-medium mb-3">
+                Current: <span className="font-mono text-[var(--md-sys-on-surface)]">{effectiveBase}</span>
                 <span className="ml-1">({configSource === 'browser' ? 'this device' : 'server env'})</span>
               </p>
             )}
-            <p className="mb-4 text-[13px] text-[var(--g-text2)]">
-              Base URL for your DPAL API. In Vercel: Settings → Environment Variables → <code className="rounded bg-[var(--g-surface2)] px-1 py-0.5 text-[12px]">NEXT_PUBLIC_DPAL_API_BASE</code>.
+            <p className="md-body-medium mb-4">
+              Base URL for your DPAL API. In Vercel: Settings → Environment Variables → <code className="rounded bg-[var(--md-sys-surface-container-high)] px-1.5 py-0.5 text-[12px]">NEXT_PUBLIC_DPAL_API_BASE</code>.
             </p>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface)] p-4 shadow-md">
               <input
                 type="url"
                 value={apiBaseInput}
                 onChange={(e) => { setApiBaseInput(e.target.value); setTestResult(null); }}
                 placeholder="https://your-api.example.com"
-                className="h-9 min-w-[280px] rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] px-3 text-[14px] text-[var(--g-text)] placeholder:text-[var(--g-text3)] focus:border-[var(--g-blue)] focus:outline-none focus:ring-1 focus:ring-[var(--g-blue)]"
+                className="md-body-large h-10 min-w-[260px] rounded-[8px] border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface)] px-3 outline-none placeholder:text-[var(--md-sys-outline)] focus:border-[var(--md-sys-primary)] focus:ring-2 focus:ring-[var(--md-sys-primary)]/20"
               />
-              <button
-                type="button"
-                onClick={testConnection}
-                disabled={testing || !apiBaseInput.trim()}
-                className="h-9 rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] px-3 text-[13px] font-medium text-[var(--g-text)] hover:bg-[var(--g-surface2)] disabled:opacity-50"
-              >
+              <button type="button" onClick={testConnection} disabled={testing || !apiBaseInput.trim()} className="md-button-outlined h-10 disabled:opacity-50">
                 {testing ? 'Testing…' : 'Test'}
               </button>
-              <button
-                type="button"
-                onClick={connectApi}
-                className="h-9 rounded-[var(--g-radius)] bg-[var(--g-blue)] px-4 text-[13px] font-medium text-white hover:bg-[var(--g-blue-hover)]"
-              >
+              <button type="button" onClick={connectApi} className="md-button-filled h-10">
                 Connect
               </button>
               {apiBaseOverride && (
-                <button
-                  type="button"
-                  onClick={clearApiOverride}
-                  className="h-9 rounded-[var(--g-radius)] px-3 text-[13px] font-medium text-[var(--g-text2)] hover:bg-[var(--g-surface2)] hover:text-[var(--g-text)]"
-                >
+                <button type="button" onClick={clearApiOverride} className="md-button-tonal h-10 text-[var(--md-sys-on-surface-variant)] hover:bg-[var(--md-sys-surface-container-highest)]">
                   Clear
                 </button>
               )}
             </div>
             {testResult && (
-              <p className={`mt-3 text-[13px] ${testResult.ok ? 'text-[var(--g-green)]' : 'text-[var(--g-red)]'}`}>
+              <p className={`md-body-medium mt-3 ${testResult.ok ? 'text-[var(--md-sys-success)]' : 'text-[var(--md-sys-error)]'}`}>
                 {testResult.ok ? '✓ ' : '✗ '}{testResult.message}
               </p>
             )}
@@ -412,73 +447,131 @@ export default function MasterEnterpriseDashboard() {
         )}
       </header>
 
-      <div className="mx-auto flex max-w-[1280px] gap-8 px-6 py-8">
-        <aside className="hidden w-56 flex-shrink-0 lg:block">
-          <nav className="sticky top-24 space-y-0.5 rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-1 shadow-g1">
+      <div className="mx-auto flex max-w-[1280px] gap-6 px-4 py-6 sm:px-6 sm:py-8">
+        <aside className="hidden w-52 flex-shrink-0 lg:block">
+          <nav className="md-card sticky top-24 space-y-1 p-2">
+            <p className="md-label-medium mb-2 px-3 py-1.5 uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">
+              Navigation
+            </p>
             {navItems.map((item) => (
               <button
                 type="button"
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full rounded-md px-3 py-2.5 text-left text-[14px] font-normal ${
+                className={`flex w-full items-center gap-3 rounded-[8px] px-3 py-2.5 text-left md-label-large transition-colors ${
                   activeTab === item.id
-                    ? 'bg-[#e8f0fe] text-[var(--g-blue)]'
-                    : 'text-[var(--g-text2)] hover:bg-[var(--g-surface2)] hover:text-[var(--g-text)]'
+                    ? 'bg-[var(--md-sys-primary-container)] text-[var(--md-sys-on-primary-container)]'
+                    : 'text-[var(--md-sys-on-surface-variant)] hover:bg-[var(--md-sys-surface-container-high)] hover:text-[var(--md-sys-on-surface)]'
                 }`}
               >
+                {item.id === 'overview' && (
+                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                  </svg>
+                )}
+                {item.id === 'quality' && (
+                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                  </svg>
+                )}
+                {item.id === 'sites' && (
+                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+                  </svg>
+                )}
                 {item.label}
               </button>
             ))}
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 space-y-8">
+        <main className="min-w-0 flex-1 space-y-6 sm:space-y-8">
+          {/* Mobile nav: chips for tabs when sidebar is hidden */}
+          <div className="flex flex-wrap gap-2 lg:hidden">
+            {navItems.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`md-chip ${activeTab === item.id ? 'md-chip-selected' : ''}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
           {error && (
-            <div className="rounded-[var(--g-radius)] border border-[#f9ab00] bg-[#fef7e0] px-4 py-3 text-[13px] text-[#b36b00]">
-              {error}
+            <div className="md-card flex items-center gap-3 border-l-4 border-[var(--md-sys-error)] bg-[var(--md-sys-error-container)] px-4 py-3 text-[var(--md-sys-on-error-container)]">
+              <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <span className="md-body-medium">{error}</span>
             </div>
           )}
 
           {activeTab === 'overview' && (
             <>
+              <SectionTitle>Key metrics</SectionTitle>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
-                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">Total reports</p>
-                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">{reports.length}</p>
-                  <p className="mt-0.5 text-[12px] text-[var(--g-text2)]">From API feed</p>
+                <div className="metric-box flex flex-col p-4 sm:p-6">
+                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--md-sys-primary-container)] text-[var(--md-sys-primary)]">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625a5.625 5.625 0 00-.562.75V12m0 0 .375 3m-.375-3h7.5c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H8.25" />
+                    </svg>
+                  </div>
+                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">Total reports</p>
+                  <p className="md-headline-large mt-2 font-semibold">{reports.length}</p>
+                  <p className="md-body-medium mt-0.5">From API feed</p>
                 </div>
-                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
-                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">Open</p>
-                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
+                <div className="metric-box flex flex-col p-4 sm:p-6">
+                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--g-amber-bg)] text-[var(--g-amber)]">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+                    </svg>
+                  </div>
+                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">Open</p>
+                  <p className="md-headline-large mt-2 font-semibold">
                     {reports.filter((r) => ['New', 'Investigating'].includes(r.opsStatus || '')).length}
                   </p>
-                  <p className="mt-0.5 text-[12px] text-[var(--g-text2)]">New + Investigating</p>
+                  <p className="md-body-medium mt-0.5">New + Investigating</p>
                 </div>
-                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
-                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">API latency</p>
-                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
+                <div className="metric-box flex flex-col p-4 sm:p-6">
+                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--md-sys-success-container)] text-[var(--md-sys-success)]">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">API latency</p>
+                  <p className="md-headline-large mt-2 font-semibold">
                     {health?.latencyMs != null ? `${health.latencyMs} ms` : '—'}
                   </p>
-                  <p className="mt-0.5 text-[12px] text-[var(--g-text2)]">Health endpoint</p>
+                  <p className="md-body-medium mt-0.5">Health endpoint</p>
                 </div>
-                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
-                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">Endpoints OK</p>
-                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
+                <div className="metric-box flex flex-col p-4 sm:p-6">
+                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--md-sys-primary-container)] text-[var(--md-sys-primary)]">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">Endpoints OK</p>
+                  <p className="md-headline-large mt-2 font-semibold">
                     {probes.filter((p) => p.ok).length}/{probes.length || 1}
                   </p>
-                  <p className="mt-0.5 text-[12px] text-[var(--g-text2)]">Probes</p>
+                  <p className="md-body-medium mt-0.5">Probes</p>
                 </div>
               </div>
 
+              <SectionTitle>System health</SectionTitle>
               <Card
                 title="System health"
+                icon={<IconHeart />}
                 right={
                   effectiveBase ? (
                     <button
                       type="button"
                       onClick={runProbesNow}
                       disabled={probesLoading}
-                      className="rounded-md border border-[var(--g-border)] bg-[var(--g-surface)] px-3 py-1.5 text-[12px] font-medium text-[var(--g-text)] hover:bg-[var(--g-surface2)] disabled:opacity-50"
+                      className="md-button-outlined h-9 px-3 text-sm disabled:opacity-50"
                     >
                       {probesLoading ? 'Running…' : 'Run probes'}
                     </button>
@@ -486,17 +579,17 @@ export default function MasterEnterpriseDashboard() {
                 }
               >
                 {probes.length ? (
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     {probes.map((p) => (
                       <div
                         key={p.name}
-                        className="flex items-center justify-between rounded-md border border-[var(--g-divider)] bg-[var(--g-surface2)] px-4 py-3"
+                        className="flex items-center justify-between rounded-[8px] border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] px-4 py-3"
                       >
-                        <span className="text-[14px] font-normal text-[var(--g-text)] capitalize">
+                        <span className="text-[14px] font-normal text-[var(--md-sys-on-surface)] capitalize">
                           {p.name.replace(/([A-Z])/g, ' $1').trim()}
                         </span>
                         <div className="flex items-center gap-2">
-                          <span className="text-[12px] text-[var(--g-text2)]">{p.latencyMs} ms</span>
+                          <span className="md-body-medium">{p.latencyMs} ms</span>
                           <StatusBadge ok={p.ok} />
                         </div>
                       </div>
@@ -510,14 +603,16 @@ export default function MasterEnterpriseDashboard() {
                 )}
               </Card>
 
+              <SectionTitle>Recent reports</SectionTitle>
               <Card
                 title="Recent reports"
+                icon={<IconDoc />}
                 right={
                   reports.length > 0 ? (
                     <button
                       type="button"
                       onClick={exportCsv}
-                      className="rounded-md px-3 py-1.5 text-[12px] font-medium text-[var(--g-blue)] hover:bg-[#e8f0fe]"
+                      className="md-button-tonal h-9 px-3 text-sm"
                     >
                       Export CSV
                     </button>
@@ -525,29 +620,37 @@ export default function MasterEnterpriseDashboard() {
                 }
               >
                 {reports.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[14px]">
+                  <div className="overflow-x-auto rounded-[8px] border border-[var(--md-sys-outline-variant)]">
+                    <table className="w-full md-body-large">
                       <thead>
-                        <tr className="border-b border-[var(--g-divider)] text-left text-[12px] font-medium text-[var(--g-text2)]">
-                          <th className="pb-3 pr-4">Title</th>
-                          <th className="pb-3 pr-4">Status</th>
-                          <th className="pb-3 pr-4">Severity</th>
-                          <th className="pb-3">Updated</th>
+                        <tr className="border-b border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] text-left md-label-medium text-[var(--md-sys-on-surface-variant)]">
+                          <th className="px-4 py-3">Title</th>
+                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3">Severity</th>
+                          <th className="px-4 py-3">Updated</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {(statusFilter ? filteredReports : reports).slice(0, 20).map((r) => (
-                          <tr key={r.reportId} className="border-b border-[var(--g-divider)] hover:bg-[var(--g-surface2)]">
-                            <td className="max-w-[240px] truncate py-3 pr-4 font-normal text-[var(--g-text)]" title={r.title}>
+                        {(statusFilter ? filteredReports : reports).slice(0, 20).map((r, i) => (
+                          <tr
+                            key={r.reportId}
+                            className={`border-b border-[var(--md-sys-outline-variant)] last:border-0 transition-colors ${
+                              i % 2 === 0 ? 'bg-[var(--md-sys-surface)]' : 'bg-[var(--md-sys-surface-container)]/60'
+                            } hover:bg-[var(--md-sys-primary-container)]/20`}
+                          >
+                            <td className="max-w-[240px] truncate px-4 py-3 text-[var(--md-sys-on-surface)]" title={r.title}>
                               {r.title || '—'}
                             </td>
-                            <td className="py-3 pr-4">
-                              <span className="rounded-full bg-[var(--g-surface2)] px-2 py-0.5 text-[12px] font-medium text-[var(--g-text2)]">
+                            <td className="px-4 py-3">
+                              <span
+                                className="inline-flex rounded-full border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container-high)] px-2.5 py-0.5 md-label-medium"
+                                style={{ borderColor: STATUS_COLORS[r.opsStatus || 'New'] ? `${STATUS_COLORS[r.opsStatus || 'New']}50` : undefined }}
+                              >
                                 {r.opsStatus || 'New'}
                               </span>
                             </td>
-                            <td className="py-3 pr-4 text-[var(--g-text2)]">{r.severity || '—'}</td>
-                            <td className="py-3 text-[var(--g-text2)]">
+                            <td className="px-4 py-3 text-[var(--md-sys-on-surface-variant)]">{r.severity || '—'}</td>
+                            <td className="px-4 py-3 text-[var(--md-sys-on-surface-variant)]">
                               {r.updatedAt || r.createdAt
                                 ? new Date(r.updatedAt || r.createdAt!).toLocaleDateString()
                                 : '—'}
@@ -556,7 +659,7 @@ export default function MasterEnterpriseDashboard() {
                         ))}
                       </tbody>
                     </table>
-                    <p className="mt-3 text-[12px] text-[var(--g-text2)]">
+                    <p className="md-body-medium mt-3 rounded-[8px] bg-[var(--md-sys-surface-container)] px-3 py-2">
                       Showing up to 20 of {statusFilter ? filteredReports.length : reports.length} reports.
                     </p>
                   </div>
@@ -569,28 +672,38 @@ export default function MasterEnterpriseDashboard() {
               </Card>
 
               {reports.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="text-[13px] font-normal text-[var(--g-text2)]">Filter by status</label>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="h-9 rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] px-3 text-[13px] text-[var(--g-text)] focus:border-[var(--g-blue)] focus:outline-none focus:ring-1 focus:ring-[var(--g-blue)]"
-                  >
-                    <option value="">All</option>
+                <div className="md-card flex flex-wrap items-center gap-2 p-3 sm:p-4">
+                  <span className="md-label-medium mr-1 text-[var(--md-sys-on-surface-variant)]">Filter by status</span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter('')}
+                      className={`md-chip ${!statusFilter ? 'md-chip-selected' : ''}`}
+                    >
+                      All
+                    </button>
                     {Array.from(new Set(reports.map((r) => r.opsStatus || 'New'))).map((s) => (
-                      <option key={s} value={s}>{s}</option>
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setStatusFilter(s)}
+                        className={`md-chip ${statusFilter === s ? 'md-chip-selected' : ''}`}
+                      >
+                        {s}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                   {statusFilter && (
-                    <span className="text-[12px] text-[var(--g-text2)]">
+                    <span className="md-body-medium ml-auto rounded-full bg-[var(--md-sys-surface-container-high)] px-2.5 py-1 text-[var(--md-sys-on-surface-variant)]">
                       {filteredReports.length} of {reports.length}
                     </span>
                   )}
                 </div>
               )}
 
+              <SectionTitle>Analytics</SectionTitle>
               <div className="grid gap-6 lg:grid-cols-2">
-                <Card title="Reports by status">
+                <Card title="Reports by status" icon={<IconChart />}>
                   {byStatus.length ? (
                     <div className="h-[240px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -608,7 +721,7 @@ export default function MasterEnterpriseDashboard() {
                               <Cell key={i} fill={STATUS_COLORS[byStatus[i].name] || '#5f6368'} />
                             ))}
                           </Pie>
-                          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--g-divider)', background: 'var(--g-surface)', fontSize: 12 }} />
+                          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--md-sys-outline-variant)', background: 'var(--md-sys-surface)', fontSize: 12 }} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -616,15 +729,15 @@ export default function MasterEnterpriseDashboard() {
                     <EmptyState message="No report data yet" submessage="Connect your API and refresh to load reports." />
                   )}
                 </Card>
-                <Card title="Reports by severity">
+                <Card title="Reports by severity" icon={<IconChart />}>
                   {bySeverity.length ? (
                     <div className="h-[240px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={bySeverity} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="var(--g-divider)" />
-                          <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'var(--g-text2)' }} />
-                          <YAxis tick={{ fontSize: 12, fill: 'var(--g-text2)' }} />
-                          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--g-divider)', background: 'var(--g-surface)', fontSize: 12 }} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-outline-variant)" />
+                          <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'var(--md-sys-on-surface-variant)' }} />
+                          <YAxis tick={{ fontSize: 12, fill: 'var(--md-sys-on-surface-variant)' }} />
+                          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--md-sys-outline-variant)', background: 'var(--md-sys-surface)', fontSize: 12 }} />
                           <Bar dataKey="value" fill="#1a73e8" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -636,14 +749,14 @@ export default function MasterEnterpriseDashboard() {
               </div>
 
               {trendData.length > 0 && (
-                <Card title="Report intake trend (last 14 days)">
+                <Card title="Report intake trend (last 14 days)" icon={<IconChart />}>
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={trendData} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--g-divider)" />
-                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--g-text2)' }} />
-                        <YAxis tick={{ fontSize: 12, fill: 'var(--g-text2)' }} />
-                        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--g-divider)', background: 'var(--g-surface)', fontSize: 12 }} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--md-sys-outline-variant)" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--md-sys-on-surface-variant)' }} />
+                        <YAxis tick={{ fontSize: 12, fill: 'var(--md-sys-on-surface-variant)' }} />
+                        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--md-sys-outline-variant)', background: 'var(--md-sys-surface)', fontSize: 12 }} />
                         <Line type="monotone" dataKey="reports" stroke="#1a73e8" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#1a73e8' }} />
                       </LineChart>
                     </ResponsiveContainer>
@@ -655,38 +768,70 @@ export default function MasterEnterpriseDashboard() {
 
           {activeTab === 'quality' && (
             <>
+              <SectionTitle>Quality metrics</SectionTitle>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
-                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">Data completeness</p>
-                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
+                <div className="metric-box flex flex-col p-4 sm:p-6">
+                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--md-sys-success-container)] text-[var(--md-sys-success)]">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">Data completeness</p>
+                  <p className="md-headline-large mt-2 font-semibold">
                     {qualityMetrics.total ? `${qualityMetrics.pctComplete}%` : '—'}
                   </p>
-                  <p className="mt-0.5 text-[12px] text-[var(--g-text2)]">Title + location + description</p>
+                  <p className="md-body-medium mt-0.5">Title + location + description</p>
                 </div>
-                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
-                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">With title</p>
-                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
+                <div className="metric-box flex flex-col p-4 sm:p-6">
+                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--md-sys-primary-container)] text-[var(--md-sys-primary)]">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25" />
+                    </svg>
+                  </div>
+                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">With title</p>
+                  <p className="md-headline-large mt-2 font-semibold">
                     {qualityMetrics.withTitle}/{qualityMetrics.total || 0}
                   </p>
                 </div>
-                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
-                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">With location</p>
-                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[var(--g-text)]">
+                <div className="metric-box flex flex-col p-4 sm:p-6">
+                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--md-sys-primary-container)] text-[var(--md-sys-primary)]">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                    </svg>
+                  </div>
+                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">With location</p>
+                  <p className="md-headline-large mt-2 font-semibold">
                     {qualityMetrics.withLocation}/{qualityMetrics.total || 0}
                   </p>
                 </div>
-                <div className="rounded-[var(--g-radius)] border border-[var(--g-border)] bg-[var(--g-surface)] p-6 shadow-g1">
-                  <p className="text-[12px] font-medium uppercase tracking-wider text-[var(--g-text2)]">Incomplete</p>
-                  <p className="mt-2 text-[28px] font-normal tracking-tight text-[#b36b00]">
+                <div className="metric-box flex flex-col p-4 sm:p-6">
+                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--g-amber-bg)] text-[var(--g-amber)]">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                  </div>
+                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">Incomplete</p>
+                  <p className="md-headline-large mt-2 font-semibold text-[var(--g-amber)]">
                     {qualityMetrics.incomplete}
                   </p>
                 </div>
               </div>
-              <Card title="Quality rules">
-                <ul className="space-y-2 text-[14px] font-normal text-[var(--g-text2)]">
-                  <li>Reports with missing title, location, or description are flagged as incomplete.</li>
-                  <li>Completeness % = (fields present) / (3 × total reports).</li>
-                  <li>All metrics are computed from the current reports feed.</li>
+              <SectionTitle>Rules &amp; guidelines</SectionTitle>
+              <Card title="Quality rules" icon={<IconChart />}>
+                <ul className="md-body-large space-y-3 rounded-[8px] border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] p-4 text-[var(--md-sys-on-surface-variant)]">
+                  <li className="flex gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--md-sys-primary)]" />
+                    Reports with missing title, location, or description are flagged as incomplete.
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--md-sys-primary)]" />
+                    Completeness % = (fields present) / (3 × total reports).
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--md-sys-primary)]" />
+                    All metrics are computed from the current reports feed.
+                  </li>
                 </ul>
               </Card>
             </>
@@ -694,23 +839,29 @@ export default function MasterEnterpriseDashboard() {
 
           {activeTab === 'sites' && (
             <>
-              <Card title="Sites / tenants">
+              <SectionTitle>Sites &amp; tenants</SectionTitle>
+              <Card title="Sites / tenants" icon={<IconMap />}>
                 {sitesFromReports.length ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[14px]">
+                  <div className="overflow-x-auto rounded-[8px] border border-[var(--md-sys-outline-variant)]">
+                    <table className="w-full md-body-large">
                       <thead>
-                        <tr className="border-b border-[var(--g-divider)] text-left text-[12px] font-medium text-[var(--g-text2)]">
-                          <th className="pb-3 pr-4">Site / Entity</th>
-                          <th className="pb-3 pr-4">Report count</th>
-                          <th className="pb-3">Last activity</th>
+                        <tr className="border-b border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] text-left md-label-medium text-[var(--md-sys-on-surface-variant)]">
+                          <th className="px-4 py-3">Site / Entity</th>
+                          <th className="px-4 py-3">Report count</th>
+                          <th className="px-4 py-3">Last activity</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {sitesFromReports.map((s) => (
-                          <tr key={s.name} className="border-b border-[var(--g-divider)] hover:bg-[var(--g-surface2)]">
-                            <td className="py-3 pr-4 font-normal text-[var(--g-text)]">{s.name}</td>
-                            <td className="py-3 pr-4 text-[var(--g-text2)]">{s.count}</td>
-                            <td className="py-3 text-[var(--g-text2)]">
+                        {sitesFromReports.map((s, i) => (
+                          <tr
+                            key={s.name}
+                            className={`border-b border-[var(--md-sys-outline-variant)] last:border-0 transition-colors ${
+                              i % 2 === 0 ? 'bg-[var(--md-sys-surface)]' : 'bg-[var(--md-sys-surface-container)]/60'
+                            } hover:bg-[var(--md-sys-primary-container)]/20`}
+                          >
+                            <td className="px-4 py-3 font-medium text-[var(--md-sys-on-surface)]">{s.name}</td>
+                            <td className="px-4 py-3 text-[var(--md-sys-on-surface-variant)]">{s.count}</td>
+                            <td className="px-4 py-3 text-[var(--md-sys-on-surface-variant)]">
                               {s.lastSeen ? new Date(s.lastSeen).toLocaleString() : '—'}
                             </td>
                           </tr>
@@ -725,14 +876,15 @@ export default function MasterEnterpriseDashboard() {
                   />
                 )}
               </Card>
-              <Card title="Platform status">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between rounded-md border border-[var(--g-divider)] bg-[var(--g-surface2)] px-4 py-3">
-                    <span className="text-[14px] font-normal text-[var(--g-text)]">Nexus API (DPAL backend)</span>
+              <SectionTitle>Platform status</SectionTitle>
+              <Card title="Platform status" icon={<IconHeart />}>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between rounded-[8px] border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] px-4 py-3">
+                    <span className="md-body-large text-[var(--md-sys-on-surface)]">Nexus API (DPAL backend)</span>
                     <StatusBadge ok={health?.ok ?? false} />
                   </div>
-                  <div className="flex items-center justify-between rounded-md border border-[var(--g-divider)] bg-[var(--g-surface2)] px-4 py-3">
-                    <span className="text-[14px] font-normal text-[var(--g-text)]">Reports feed</span>
+                  <div className="flex items-center justify-between rounded-[8px] border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] px-4 py-3">
+                    <span className="md-body-large text-[var(--md-sys-on-surface)]">Reports feed</span>
                     <StatusBadge ok={probes.find((p) => p.name === 'reportsFeed')?.ok ?? false} />
                   </div>
                 </div>
@@ -741,6 +893,12 @@ export default function MasterEnterpriseDashboard() {
           )}
         </main>
       </div>
+
+      {snackbar && (
+        <div className="md-snackbar" role="status" aria-live="polite">
+          {snackbar.message}
+        </div>
+      )}
     </div>
   );
 }
