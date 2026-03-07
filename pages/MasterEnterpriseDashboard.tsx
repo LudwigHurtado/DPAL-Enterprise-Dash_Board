@@ -27,7 +27,7 @@ import {
 
 const STORAGE_KEY = 'dpal_api_base_override';
 
-type TabId = 'overview' | 'quality' | 'sites';
+type TabId = 'overview' | 'intelligence' | 'reports' | 'investigations' | 'audit' | 'quality' | 'sites' | 'alerts';
 
 const STATUS_COLORS: Record<string, string> = {
   New: '#f29900',
@@ -35,6 +35,22 @@ const STATUS_COLORS: Record<string, string> = {
   'Action Taken': '#9334e6',
   Resolved: '#1e8e3e',
 };
+
+type UrgencyLevel = 'critical' | 'warning' | 'dispute' | 'escalation' | 'resolved' | 'neutral';
+function urgencyForReport(r: ReportItem): UrgencyLevel {
+  const status = r.opsStatus || 'New';
+  const severity = (r.severity || '').toLowerCase();
+  if (status === 'Resolved') return 'resolved';
+  if (severity === 'critical' || severity === 'high') return 'critical';
+  if (status === 'Action Taken') return 'dispute';
+  if (status === 'New') return 'warning';
+  if (status === 'Investigating') return 'escalation';
+  return 'neutral';
+}
+
+function UrgencyBadge({ level, label }: { level: UrgencyLevel; label: string }) {
+  return <span className={`hq-badge hq-badge-${level}`}>{label}</span>;
+}
 
 function Card({
   title,
@@ -119,6 +135,7 @@ export default function MasterEnterpriseDashboard() {
   const [testing, setTesting] = useState(false);
   const [probesLoading, setProbesLoading] = useState(false);
   const [snackbar, setSnackbar] = useState<{ message: string } | null>(null);
+  const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
 
   const showSnackbar = useCallback((message: string) => {
     setSnackbar({ message });
@@ -325,10 +342,45 @@ export default function MasterEnterpriseDashboard() {
       .map(([name, count]) => ({ name, reports: count }));
   }, [reports]);
 
-  const navItems: { id: TabId; label: string }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'quality', label: 'Quality Control' },
-    { id: 'sites', label: 'Site Monitoring' },
+  const auditFeed = React.useMemo(() => {
+    const entries: { id: string; time: string; text: string; urgency: UrgencyLevel }[] = [];
+    reports.slice(0, 50).forEach((r) => {
+      const created = r.createdAt || r.updatedAt;
+      if (created) {
+        entries.push({
+          id: `${r.reportId}-created`,
+          time: created,
+          text: `Report received: ${(r.title || r.reportId).slice(0, 50)}${(r.title || '').length > 50 ? '…' : ''}`,
+          urgency: urgencyForReport(r),
+        });
+      }
+      if (r.updatedAt && r.updatedAt !== r.createdAt) {
+        entries.push({
+          id: `${r.reportId}-updated`,
+          time: r.updatedAt,
+          text: `Updated — ${r.opsStatus || 'New'}: ${(r.title || r.reportId).slice(0, 40)}…`,
+          urgency: urgencyForReport(r),
+        });
+      }
+    });
+    entries.sort((a, b) => (b.time.localeCompare(a.time)));
+    return entries.slice(0, 30);
+  }, [reports]);
+
+  const openCount = reports.filter((r) => ['New', 'Investigating'].includes(r.opsStatus || '')).length;
+  const criticalCount = reports.filter((r) => (r.severity || '').toLowerCase() === 'critical').length;
+  const disputeCount = reports.filter((r) => (r.opsStatus || '') === 'Action Taken').length;
+  const alertCount = reports.filter((r) => (r.opsStatus || '') === 'New' && (r.severity || '').toLowerCase() === 'high').length;
+
+  const commandMenuItems: { id: TabId; label: string }[] = [
+    { id: 'overview', label: 'Command overview' },
+    { id: 'intelligence', label: 'Live intelligence' },
+    { id: 'reports', label: 'Operational reports' },
+    { id: 'investigations', label: 'Investigations' },
+    { id: 'audit', label: 'Audit log' },
+    { id: 'quality', label: 'Quality control' },
+    { id: 'sites', label: 'Sites & tenants' },
+    { id: 'alerts', label: 'Alerts' },
   ];
 
   const IconChart = () => (
@@ -354,30 +406,34 @@ export default function MasterEnterpriseDashboard() {
 
   return (
     <div className="min-h-screen bg-[var(--md-sys-surface-container)] font-sans text-[14px]">
-      <header className="md-top-app-bar sticky top-0 z-30 border-b border-[var(--md-sys-outline-variant)]">
-        <div className="mx-auto flex min-h-[64px] max-w-[1280px] items-center justify-between gap-4 px-4 sm:px-6">
+      <header className="hq-command-bar sticky top-0 z-30">
+        <div className="flex h-14 items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[12px] bg-[var(--md-sys-primary)] text-[14px] font-semibold text-[var(--md-sys-on-primary)] shadow-md">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded bg-[var(--md-sys-primary)] font-semibold text-white">
               D
             </div>
             <div className="min-w-0">
-              <h1 className="md-title-large truncate font-medium">
-                HQ & QC Dashboard
-              </h1>
-              <p className="md-body-medium mt-0.5 truncate">
-                {effectiveBase ? 'Connected' : 'No API configured'}
-                {lastSync && ` · Updated ${lastSync.toLocaleTimeString()}`}
+              <h1 className="hq-title truncate">DPAL Headquarters</h1>
+              <p className="hq-subtitle truncate">
+                Enterprise command center · {effectiveBase ? 'Nexus connected' : 'No API'}
+                {lastSync && ` · ${lastSync.toLocaleTimeString()}`}
               </p>
             </div>
           </div>
-          <div className="flex flex-shrink-0 items-center gap-2">
+          <div className="hq-status-strip flex-shrink-0">
             {effectiveBase && (
-              <StatusBadge ok={health?.ok ?? false} label={health?.ok ? 'API up' : 'API down'} />
+              <>
+                <span className={health?.ok ? 'text-[#81c995]' : 'text-[#f28b82]'}>
+                  {health?.ok ? '● API up' : '● API down'}
+                </span>
+                <span>{openCount} open</span>
+                {alertCount > 0 && <span className="text-[#f28b82]">{alertCount} alerts</span>}
+              </>
             )}
             <button
               type="button"
               onClick={() => setSettingsOpen((o) => !o)}
-              className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--md-sys-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-surface-container-high)] hover:text-[var(--md-sys-on-surface)]"
+              className="rounded p-1.5 text-[var(--hq-bar-muted)] hover:bg-white/10 hover:text-[var(--hq-bar-on)]"
               title="API settings"
               aria-label="API settings"
             >
@@ -390,19 +446,9 @@ export default function MasterEnterpriseDashboard() {
               type="button"
               onClick={() => refresh()}
               disabled={loading}
-              className="md-button-filled flex h-10 items-center gap-2 disabled:opacity-50"
+              className="rounded bg-[var(--md-sys-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1557b0] disabled:opacity-50"
             >
-              {loading ? (
-                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              ) : (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                </svg>
-              )}
-              {loading ? 'Refreshing' : 'Refresh'}
+              {loading ? 'Syncing…' : 'Sync now'}
             </button>
           </div>
         </div>
@@ -447,58 +493,64 @@ export default function MasterEnterpriseDashboard() {
         )}
       </header>
 
-      <div className="mx-auto flex max-w-[1280px] gap-6 px-4 py-6 sm:px-6 sm:py-8">
-        <aside className="hidden w-52 flex-shrink-0 lg:block">
-          <nav className="md-card sticky top-24 space-y-1 p-2">
-            <p className="md-label-medium mb-2 px-3 py-1.5 uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">
-              Navigation
-            </p>
-            {navItems.map((item) => (
+      <div className="flex min-h-[calc(100vh-56px)]">
+        <aside className="hq-command-menu hidden flex-shrink-0 lg:block">
+          <nav className="sticky top-16 flex flex-col gap-0.5 py-3">
+            {commandMenuItems.map((item) => (
               <button
                 type="button"
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`flex w-full items-center gap-3 rounded-[8px] px-3 py-2.5 text-left md-label-large transition-colors ${
-                  activeTab === item.id
-                    ? 'bg-[var(--md-sys-primary-container)] text-[var(--md-sys-on-primary-container)]'
-                    : 'text-[var(--md-sys-on-surface-variant)] hover:bg-[var(--md-sys-surface-container-high)] hover:text-[var(--md-sys-on-surface)]'
-                }`}
+                onClick={() => { setActiveTab(item.id); if (item.id === 'alerts') setSelectedReport(null); }}
+                className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--md-sys-surface-container-high)] ${activeTab === item.id ? 'active' : 'text-[var(--md-sys-on-surface-variant)]'}`}
               >
-                {item.id === 'overview' && (
-                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-                  </svg>
-                )}
-                {item.id === 'quality' && (
-                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                  </svg>
-                )}
-                {item.id === 'sites' && (
-                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
-                  </svg>
-                )}
                 {item.label}
               </button>
             ))}
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 space-y-6 sm:space-y-8">
-          {/* Mobile nav: chips for tabs when sidebar is hidden */}
-          <div className="flex flex-wrap gap-2 lg:hidden">
-            {navItems.map((item) => (
+        <main className="min-w-0 flex-1 overflow-auto px-4 py-4 sm:px-6 sm:py-5">
+          {/* Mobile command chips */}
+          <div className="flex flex-wrap gap-2 pb-4 lg:hidden">
+            {commandMenuItems.map((item) => (
               <button
                 type="button"
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`md-chip ${activeTab === item.id ? 'md-chip-selected' : ''}`}
+                className={`md-chip text-xs ${activeTab === item.id ? 'md-chip-selected' : ''}`}
               >
                 {item.label}
               </button>
             ))}
           </div>
+
+          {/* Live intelligence strip — show on overview, intelligence, reports */}
+          {(activeTab === 'overview' || activeTab === 'intelligence' || activeTab === 'reports') && (
+            <div className="hq-live-intel mb-4">
+              <div className="intel-item">
+                <span className="intel-value text-[var(--md-sys-primary)]">{openCount}</span>
+                <span className="text-[var(--md-sys-on-surface-variant)]">Open cases</span>
+              </div>
+              <div className="intel-item">
+                <span className="intel-value text-[var(--hq-urgency-critical)]">{health?.ok ? 0 : 1}</span>
+                <span className="text-[var(--md-sys-on-surface-variant)]">Failures</span>
+              </div>
+              <div className="intel-item">
+                <span className="intel-value text-[var(--hq-urgency-dispute)]">{disputeCount}</span>
+                <span className="text-[var(--md-sys-on-surface-variant)]">Disputes</span>
+              </div>
+              <div className="intel-item">
+                <span className="intel-value text-[var(--hq-urgency-escalation)]">{criticalCount}</span>
+                <span className="text-[var(--md-sys-on-surface-variant)]">Escalations</span>
+              </div>
+              {alertCount > 0 && (
+                <div className="intel-item">
+                  <span className="intel-value text-[var(--hq-urgency-critical)]">{alertCount}</span>
+                  <span className="text-[var(--md-sys-on-surface-variant)]">Alerts</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {error && (
             <div className="md-card flex items-center gap-3 border-l-4 border-[var(--md-sys-error)] bg-[var(--md-sys-error-container)] px-4 py-3 text-[var(--md-sys-on-error-container)]">
@@ -509,7 +561,7 @@ export default function MasterEnterpriseDashboard() {
             </div>
           )}
 
-          {activeTab === 'overview' && (
+          {(activeTab === 'overview' || activeTab === 'intelligence') && (
             <>
               <SectionTitle>Key metrics</SectionTitle>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -634,20 +686,16 @@ export default function MasterEnterpriseDashboard() {
                         {(statusFilter ? filteredReports : reports).slice(0, 20).map((r, i) => (
                           <tr
                             key={r.reportId}
-                            className={`border-b border-[var(--md-sys-outline-variant)] last:border-0 transition-colors ${
-                              i % 2 === 0 ? 'bg-[var(--md-sys-surface)]' : 'bg-[var(--md-sys-surface-container)]/60'
+                            onClick={() => setSelectedReport(r)}
+                            className={`cursor-pointer border-b border-[var(--md-sys-outline-variant)] last:border-0 transition-colors ${
+                              selectedReport?.reportId === r.reportId ? 'bg-[var(--md-sys-primary-container)]/40' : i % 2 === 0 ? 'bg-[var(--md-sys-surface)]' : 'bg-[var(--md-sys-surface-container)]/60'
                             } hover:bg-[var(--md-sys-primary-container)]/20`}
                           >
                             <td className="max-w-[240px] truncate px-4 py-3 text-[var(--md-sys-on-surface)]" title={r.title}>
                               {r.title || '—'}
                             </td>
                             <td className="px-4 py-3">
-                              <span
-                                className="inline-flex rounded-full border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container-high)] px-2.5 py-0.5 md-label-medium"
-                                style={{ borderColor: STATUS_COLORS[r.opsStatus || 'New'] ? `${STATUS_COLORS[r.opsStatus || 'New']}50` : undefined }}
-                              >
-                                {r.opsStatus || 'New'}
-                              </span>
+                              <UrgencyBadge level={urgencyForReport(r)} label={r.opsStatus || 'New'} />
                             </td>
                             <td className="px-4 py-3 text-[var(--md-sys-on-surface-variant)]">{r.severity || '—'}</td>
                             <td className="px-4 py-3 text-[var(--md-sys-on-surface-variant)]">
@@ -763,6 +811,149 @@ export default function MasterEnterpriseDashboard() {
                   </div>
                 </Card>
               )}
+            </>
+          )}
+
+          {activeTab === 'reports' && (
+            <>
+              <SectionTitle>Operational control</SectionTitle>
+              {reports.length > 0 && (
+                <div className="md-card flex flex-wrap items-center gap-2 p-3 sm:p-4">
+                  <span className="md-label-medium mr-1 text-[var(--md-sys-on-surface-variant)]">Filter by status</span>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setStatusFilter('')} className={`md-chip ${!statusFilter ? 'md-chip-selected' : ''}`}>All</button>
+                    {Array.from(new Set(reports.map((r) => r.opsStatus || 'New'))).map((s) => (
+                      <button key={s} type="button" onClick={() => setStatusFilter(s)} className={`md-chip ${statusFilter === s ? 'md-chip-selected' : ''}`}>{s}</button>
+                    ))}
+                  </div>
+                  <button type="button" onClick={exportCsv} className="md-button-tonal ml-auto h-9 px-3 text-sm">Export CSV</button>
+                </div>
+              )}
+              <Card title="Reports" icon={<IconDoc />} right={reports.length > 0 ? <button type="button" onClick={exportCsv} className="md-button-tonal h-9 px-3 text-sm">Export CSV</button> : null}>
+                {reports.length > 0 ? (
+                  <div className="overflow-x-auto rounded-[8px] border border-[var(--md-sys-outline-variant)]">
+                    <table className="w-full md-body-large">
+                      <thead>
+                        <tr className="border-b border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] text-left md-label-medium text-[var(--md-sys-on-surface-variant)]">
+                          <th className="px-4 py-3">Title</th>
+                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3">Severity</th>
+                          <th className="px-4 py-3">Updated</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(statusFilter ? filteredReports : reports).slice(0, 50).map((r, i) => (
+                          <tr
+                            key={r.reportId}
+                            onClick={() => setSelectedReport(r)}
+                            className={`cursor-pointer border-b border-[var(--md-sys-outline-variant)] last:border-0 transition-colors ${selectedReport?.reportId === r.reportId ? 'bg-[var(--md-sys-primary-container)]/40' : i % 2 === 0 ? 'bg-[var(--md-sys-surface)]' : 'bg-[var(--md-sys-surface-container)]/60'} hover:bg-[var(--md-sys-primary-container)]/20`}
+                          >
+                            <td className="max-w-[240px] truncate px-4 py-3 text-[var(--md-sys-on-surface)]" title={r.title}>{r.title || '—'}</td>
+                            <td className="px-4 py-3"><UrgencyBadge level={urgencyForReport(r)} label={r.opsStatus || 'New'} /></td>
+                            <td className="px-4 py-3 text-[var(--md-sys-on-surface-variant)]">{r.severity || '—'}</td>
+                            <td className="px-4 py-3 text-[var(--md-sys-on-surface-variant)]">{r.updatedAt || r.createdAt ? new Date(r.updatedAt || r.createdAt!).toLocaleDateString() : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <p className="md-body-medium mt-3 rounded-[8px] bg-[var(--md-sys-surface-container)] px-3 py-2">Showing up to 50 of {statusFilter ? filteredReports.length : reports.length} reports. Click a row for detail.</p>
+                  </div>
+                ) : (
+                  <EmptyState message="No reports yet" submessage="Connect your API and refresh to load the reports feed." />
+                )}
+              </Card>
+            </>
+          )}
+
+          {activeTab === 'investigations' && (
+            <>
+              <SectionTitle>Investigations</SectionTitle>
+              <Card title="Cases under investigation" icon={<IconDoc />}>
+                {(() => {
+                  const investigating = reports.filter((r) => (r.opsStatus || '') === 'Investigating');
+                  return investigating.length > 0 ? (
+                    <div className="overflow-x-auto rounded-[8px] border border-[var(--md-sys-outline-variant)]">
+                      <table className="w-full md-body-large">
+                        <thead>
+                          <tr className="border-b border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] text-left md-label-medium text-[var(--md-sys-on-surface-variant)]">
+                            <th className="px-4 py-3">Title</th>
+                            <th className="px-4 py-3">Severity</th>
+                            <th className="px-4 py-3">Updated</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {investigating.slice(0, 30).map((r, i) => (
+                            <tr key={r.reportId} onClick={() => setSelectedReport(r)} className={`cursor-pointer border-b border-[var(--md-sys-outline-variant)] last:border-0 ${selectedReport?.reportId === r.reportId ? 'bg-[var(--md-sys-primary-container)]/40' : i % 2 === 0 ? 'bg-[var(--md-sys-surface)]' : 'bg-[var(--md-sys-surface-container)]/60'} hover:bg-[var(--md-sys-primary-container)]/20`}>
+                              <td className="max-w-[280px] truncate px-4 py-3 text-[var(--md-sys-on-surface)]" title={r.title}>{r.title || '—'}</td>
+                              <td className="px-4 py-3"><UrgencyBadge level={urgencyForReport(r)} label={r.severity || '—'} /></td>
+                              <td className="px-4 py-3 text-[var(--md-sys-on-surface-variant)]">{r.updatedAt || r.createdAt ? new Date(r.updatedAt || r.createdAt!).toLocaleString() : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <EmptyState message="No cases under investigation" submessage="Reports with status Investigating appear here." />
+                  );
+                })()}
+              </Card>
+            </>
+          )}
+
+          {activeTab === 'audit' && (
+            <>
+              <SectionTitle>Audit log</SectionTitle>
+              <Card title="Activity &amp; traceability" icon={<IconDoc />}>
+                {auditFeed.length > 0 ? (
+                  <div className="space-y-0">
+                    {auditFeed.map((entry) => (
+                      <div key={entry.id} className={`hq-timeline-item ${entry.urgency}`}>
+                        <p className="text-[10px] font-medium text-[var(--md-sys-on-surface-variant)]">{new Date(entry.time).toLocaleString()}</p>
+                        <p className="mt-0.5 text-[var(--md-sys-on-surface)]">{entry.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState message="No audit entries yet" submessage="Activity is derived from report creation and updates." />
+                )}
+              </Card>
+            </>
+          )}
+
+          {activeTab === 'alerts' && (
+            <>
+              <SectionTitle>Alerts</SectionTitle>
+              <Card title="Items requiring attention" icon={<IconDoc />}>
+                {(() => {
+                  const alertsList = reports.filter((r) => (r.opsStatus || '') === 'New' && ((r.severity || '').toLowerCase() === 'high' || (r.severity || '').toLowerCase() === 'critical'));
+                  return alertsList.length > 0 ? (
+                    <div className="overflow-x-auto rounded-[8px] border border-[var(--hq-urgency-critical)]/30 bg-[var(--md-sys-error-container)]/20">
+                      <table className="w-full md-body-large">
+                        <thead>
+                          <tr className="border-b border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] text-left md-label-medium text-[var(--md-sys-on-surface-variant)]">
+                            <th className="px-4 py-3">Title</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Severity</th>
+                            <th className="px-4 py-3">Updated</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {alertsList.slice(0, 30).map((r, i) => (
+                            <tr key={r.reportId} onClick={() => setSelectedReport(r)} className={`cursor-pointer border-b border-[var(--md-sys-outline-variant)] last:border-0 ${selectedReport?.reportId === r.reportId ? 'bg-[var(--md-sys-primary-container)]/40' : i % 2 === 0 ? 'bg-[var(--md-sys-surface)]' : 'bg-[var(--md-sys-surface-container)]/60'} hover:bg-[var(--md-sys-primary-container)]/20`}>
+                              <td className="max-w-[240px] truncate px-4 py-3 font-medium text-[var(--md-sys-on-surface)]" title={r.title}>{r.title || '—'}</td>
+                              <td className="px-4 py-3"><UrgencyBadge level="critical" label={r.opsStatus || 'New'} /></td>
+                              <td className="px-4 py-3"><UrgencyBadge level="critical" label={r.severity || '—'} /></td>
+                              <td className="px-4 py-3 text-[var(--md-sys-on-surface-variant)]">{r.updatedAt || r.createdAt ? new Date(r.updatedAt || r.createdAt!).toLocaleString() : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <EmptyState message="No active alerts" submessage="New reports with high or critical severity appear here." />
+                  );
+                })()}
+              </Card>
             </>
           )}
 
@@ -892,6 +1083,69 @@ export default function MasterEnterpriseDashboard() {
             </>
           )}
         </main>
+
+        {/* Right: contextual detail inspector */}
+        <div className={`hq-inspector flex-shrink-0 border-t border-[var(--md-sys-outline-variant)] lg:border-t-0 ${selectedReport ? 'w-full lg:w-[360px]' : 'hidden xl:block xl:w-[320px]'}`}>
+          <div className="hq-inspector-header sticky top-0 z-10 bg-[var(--md-sys-surface)]">
+            {selectedReport ? 'Report detail' : 'Detail'}
+            {selectedReport && (
+              <button
+                type="button"
+                onClick={() => setSelectedReport(null)}
+                className="rounded p-1 text-[var(--md-sys-on-surface-variant)] hover:bg-[var(--md-sys-surface-container-high)]"
+                aria-label="Close"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          <div className="p-4">
+            {selectedReport ? (
+              <div className="space-y-4 text-sm">
+                <div>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">Title</p>
+                  <p className="font-medium text-[var(--md-sys-on-surface)]">{selectedReport.title || '—'}</p>
+                </div>
+                {selectedReport.description && (
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">Description</p>
+                    <p className="text-[var(--md-sys-on-surface-variant)]">{selectedReport.description}</p>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <UrgencyBadge level={urgencyForReport(selectedReport)} label={selectedReport.opsStatus || 'New'} />
+                  {selectedReport.severity && (
+                    <span className="hq-badge hq-badge-neutral">{selectedReport.severity}</span>
+                  )}
+                </div>
+                <div>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">Entity</p>
+                  <p className="text-[var(--md-sys-on-surface)]">{selectedReport.entityName || selectedReport.entityType || '—'}</p>
+                </div>
+                {selectedReport.location && (
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">Location</p>
+                    <p className="text-[var(--md-sys-on-surface-variant)]">{selectedReport.location}</p>
+                  </div>
+                )}
+                <div className="border-t border-[var(--md-sys-outline-variant)] pt-3">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">Traceability</p>
+                  <p className="font-mono text-xs text-[var(--md-sys-on-surface-variant)]">{selectedReport.reportId}</p>
+                  <p className="mt-1 text-xs text-[var(--md-sys-on-surface-variant)]">
+                    Created {selectedReport.createdAt ? new Date(selectedReport.createdAt).toLocaleString() : '—'}
+                    {selectedReport.updatedAt && selectedReport.updatedAt !== selectedReport.createdAt && (
+                      <> · Updated {new Date(selectedReport.updatedAt).toLocaleString()}</>
+                    )}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--md-sys-on-surface-variant)]">Select a report or entity from the operational table to view details here. Full traceability and audit trail are shown.</p>
+            )}
+          </div>
+        </div>
       </div>
 
       {snackbar && (
