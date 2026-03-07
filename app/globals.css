@@ -383,6 +383,11 @@ body {
 .hq-timeline-item.warning { border-left-color: var(--hq-urgency-warning); }
 .hq-timeline-item.warning::before { background: var(--hq-urgency-warning); }
 
+/* Series 2: Triage queue board column */
+.hq-triage-column {
+  min-height: 200px;
+}
+
 /* Urgency badges: critical, warning, dispute, escalation, resolved, neutral */
 .hq-badge {
   display: inline-flex;

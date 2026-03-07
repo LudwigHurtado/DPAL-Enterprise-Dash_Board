@@ -27,7 +27,7 @@ import {
 
 const STORAGE_KEY = 'dpal_api_base_override';
 
-type TabId = 'overview' | 'intelligence' | 'reports' | 'investigations' | 'audit' | 'quality' | 'sites' | 'alerts';
+type TabId = 'overview' | 'sites' | 'reports' | 'triage' | 'ledger' | 'evidence' | 'investigations' | 'alerts' | 'aiTasks' | 'users' | 'audit' | 'integrations' | 'settings';
 
 const STATUS_COLORS: Record<string, string> = {
   New: '#f29900',
@@ -136,6 +136,8 @@ export default function MasterEnterpriseDashboard() {
   const [probesLoading, setProbesLoading] = useState(false);
   const [snackbar, setSnackbar] = useState<{ message: string } | null>(null);
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
+  const [env, setEnv] = useState<'dev' | 'staging' | 'production'>('production');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const showSnackbar = useCallback((message: string) => {
     setSnackbar({ message });
@@ -373,14 +375,19 @@ export default function MasterEnterpriseDashboard() {
   const alertCount = reports.filter((r) => (r.opsStatus || '') === 'New' && (r.severity || '').toLowerCase() === 'high').length;
 
   const commandMenuItems: { id: TabId; label: string }[] = [
-    { id: 'overview', label: 'Command overview' },
-    { id: 'intelligence', label: 'Live intelligence' },
-    { id: 'reports', label: 'Operational reports' },
+    { id: 'overview', label: 'Overview' },
+    { id: 'sites', label: 'Sites' },
+    { id: 'reports', label: 'Reports' },
+    { id: 'triage', label: 'Triage' },
+    { id: 'ledger', label: 'Ledger' },
+    { id: 'evidence', label: 'Evidence' },
     { id: 'investigations', label: 'Investigations' },
-    { id: 'audit', label: 'Audit log' },
-    { id: 'quality', label: 'Quality control' },
-    { id: 'sites', label: 'Sites & tenants' },
     { id: 'alerts', label: 'Alerts' },
+    { id: 'aiTasks', label: 'AI Tasks' },
+    { id: 'users', label: 'Users' },
+    { id: 'audit', label: 'Audit' },
+    { id: 'integrations', label: 'Integrations' },
+    { id: 'settings', label: 'Settings' },
   ];
 
   const IconChart = () => (
@@ -407,7 +414,7 @@ export default function MasterEnterpriseDashboard() {
   return (
     <div className="min-h-screen bg-[var(--md-sys-surface-container)] font-sans text-[14px]">
       <header className="hq-command-bar sticky top-0 z-30">
-        <div className="flex h-14 items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="flex h-14 flex-wrap items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded bg-[var(--md-sys-primary)] font-semibold text-white">
               D
@@ -420,34 +427,32 @@ export default function MasterEnterpriseDashboard() {
               </p>
             </div>
           </div>
-          <div className="hq-status-strip flex-shrink-0">
+          <div className="hq-status-strip flex flex-shrink-0 flex-wrap items-center gap-3">
+            <select value={env} onChange={(e) => setEnv(e.target.value as 'dev' | 'staging' | 'production')} className="h-8 rounded border-0 bg-white/10 px-2 text-xs text-[var(--hq-bar-on)] focus:ring-1 focus:ring-white/30">
+              <option value="dev">Dev</option>
+              <option value="staging">Staging</option>
+              <option value="production">Production</option>
+            </select>
             {effectiveBase && (
               <>
                 <span className={health?.ok ? 'text-[#81c995]' : 'text-[#f28b82]'}>
                   {health?.ok ? '● API up' : '● API down'}
                 </span>
+                <span title="Connected sites">{effectiveBase ? 1 : 0} sites</span>
                 <span>{openCount} open</span>
                 {alertCount > 0 && <span className="text-[#f28b82]">{alertCount} alerts</span>}
+                <span title="Pending verification">0 pending</span>
               </>
             )}
-            <button
-              type="button"
-              onClick={() => setSettingsOpen((o) => !o)}
-              className="rounded p-1.5 text-[var(--hq-bar-muted)] hover:bg-white/10 hover:text-[var(--hq-bar-on)]"
-              title="API settings"
-              aria-label="API settings"
-            >
+            <input type="search" placeholder="Search…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-8 w-28 rounded border-0 bg-white/10 px-2 text-xs text-[var(--hq-bar-on)] placeholder:text-[var(--hq-bar-muted)] focus:ring-1 focus:ring-white/30 sm:w-36" />
+            <span className="text-[10px] text-[var(--hq-bar-muted)]">{new Date().toLocaleTimeString()}</span>
+            <button type="button" onClick={() => setSettingsOpen((o) => !o)} className="rounded p-1.5 text-[var(--hq-bar-muted)] hover:bg-white/10 hover:text-[var(--hq-bar-on)]" title="API settings" aria-label="API settings">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94a.75.75 0 01.596 0cA2.251 2.251 0 0113.5 4.898c.848.128 1.705.264 2.55.364a.75.75 0 01.63 1.408A21.474 21.474 0 0112 9c-2.264 0-4.597.032-6.963.096a.75.75 0 01-.63-1.408 20.902 20.902 0 002.55-.364A2.251 2.251 0 019.594 3.94z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
               </svg>
             </button>
-            <button
-              type="button"
-              onClick={() => refresh()}
-              disabled={loading}
-              className="rounded bg-[var(--md-sys-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1557b0] disabled:opacity-50"
-            >
+            <button type="button" onClick={() => refresh()} disabled={loading} className="rounded bg-[var(--md-sys-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1557b0] disabled:opacity-50">
               {loading ? 'Syncing…' : 'Sync now'}
             </button>
           </div>
@@ -524,8 +529,8 @@ export default function MasterEnterpriseDashboard() {
             ))}
           </div>
 
-          {/* Live intelligence strip — show on overview, intelligence, reports */}
-          {(activeTab === 'overview' || activeTab === 'intelligence' || activeTab === 'reports') && (
+          {/* Live intelligence strip — show on overview and reports */}
+          {(activeTab === 'overview' || activeTab === 'reports') && (
             <div className="hq-live-intel mb-4">
               <div className="intel-item">
                 <span className="intel-value text-[var(--md-sys-primary)]">{openCount}</span>
@@ -561,7 +566,7 @@ export default function MasterEnterpriseDashboard() {
             </div>
           )}
 
-          {(activeTab === 'overview' || activeTab === 'intelligence') && (
+          {activeTab === 'overview' && (
             <>
               <SectionTitle>Key metrics</SectionTitle>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -957,75 +962,80 @@ export default function MasterEnterpriseDashboard() {
             </>
           )}
 
-          {activeTab === 'quality' && (
+          {activeTab === 'triage' && (
             <>
-              <SectionTitle>Quality metrics</SectionTitle>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="metric-box flex flex-col p-4 sm:p-6">
-                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--md-sys-success-container)] text-[var(--md-sys-success)]">
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+              <SectionTitle>Triage queue board (Series 2)</SectionTitle>
+              <p className="md-body-medium mb-4 text-[var(--md-sys-on-surface-variant)]">
+                Queue-based review. Each column is a workflow queue; click a card to open in the detail inspector. Connect /api/triage/queues and /api/workflows for live data.
+              </p>
+              <div className="flex gap-4 overflow-x-auto pb-4">
+                {[
+                  { id: 'urgent', label: 'Urgent', reports: reports.filter((r) => (r.opsStatus || '') === 'New' && ((r.severity || '').toLowerCase() === 'high' || (r.severity || '').toLowerCase() === 'critical')) },
+                  { id: 'human-review', label: 'Human review', reports: reports.filter((r) => (r.opsStatus || '') === 'New') },
+                  { id: 'investigation', label: 'Investigation', reports: reports.filter((r) => (r.opsStatus || '') === 'Investigating') },
+                  { id: 'disputed', label: 'Disputed', reports: reports.filter((r) => (r.opsStatus || '') === 'Action Taken') },
+                  { id: 'ready-publish', label: 'Ready to publish', reports: reports.filter((r) => (r.opsStatus || '') === 'Resolved') },
+                ].map((col) => (
+                  <div key={col.id} className="hq-triage-column min-w-[220px] flex-shrink-0 rounded-lg border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="md-label-large">{col.label}</span>
+                      <span className="rounded-full bg-[var(--md-sys-surface-container-high)] px-2 py-0.5 text-xs font-medium text-[var(--md-sys-on-surface-variant)]">{col.reports.length}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {col.reports.slice(0, 8).map((r) => (
+                        <button key={r.reportId} type="button" onClick={() => setSelectedReport(r)} className="w-full rounded-lg border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface)] p-2.5 text-left transition-colors hover:border-[var(--md-sys-primary)]/50 hover:bg-[var(--md-sys-primary-container)]/20">
+                          <p className="truncate text-sm font-medium text-[var(--md-sys-on-surface)]">{r.title || r.reportId}</p>
+                          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--md-sys-on-surface-variant)]">
+                            <UrgencyBadge level={urgencyForReport(r)} label={r.opsStatus || 'New'} />
+                            {r.severity && <span>{r.severity}</span>}
+                          </p>
+                        </button>
+                      ))}
+                      {col.reports.length === 0 && <p className="py-4 text-center text-xs text-[var(--md-sys-on-surface-variant)]">Empty</p>}
+                    </div>
                   </div>
-                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">Data completeness</p>
-                  <p className="md-headline-large mt-2 font-semibold">
-                    {qualityMetrics.total ? `${qualityMetrics.pctComplete}%` : '—'}
-                  </p>
-                  <p className="md-body-medium mt-0.5">Title + location + description</p>
-                </div>
-                <div className="metric-box flex flex-col p-4 sm:p-6">
-                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--md-sys-primary-container)] text-[var(--md-sys-primary)]">
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25" />
-                    </svg>
-                  </div>
-                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">With title</p>
-                  <p className="md-headline-large mt-2 font-semibold">
-                    {qualityMetrics.withTitle}/{qualityMetrics.total || 0}
-                  </p>
-                </div>
-                <div className="metric-box flex flex-col p-4 sm:p-6">
-                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--md-sys-primary-container)] text-[var(--md-sys-primary)]">
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                    </svg>
-                  </div>
-                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">With location</p>
-                  <p className="md-headline-large mt-2 font-semibold">
-                    {qualityMetrics.withLocation}/{qualityMetrics.total || 0}
-                  </p>
-                </div>
-                <div className="metric-box flex flex-col p-4 sm:p-6">
-                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-[var(--g-amber-bg)] text-[var(--g-amber)]">
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                    </svg>
-                  </div>
-                  <p className="md-label-medium text-[var(--md-sys-on-surface-variant)]">Incomplete</p>
-                  <p className="md-headline-large mt-2 font-semibold text-[var(--g-amber)]">
-                    {qualityMetrics.incomplete}
-                  </p>
-                </div>
+                ))}
               </div>
-              <SectionTitle>Rules &amp; guidelines</SectionTitle>
-              <Card title="Quality rules" icon={<IconChart />}>
-                <ul className="md-body-large space-y-3 rounded-[8px] border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface-container)] p-4 text-[var(--md-sys-on-surface-variant)]">
-                  <li className="flex gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--md-sys-primary)]" />
-                    Reports with missing title, location, or description are flagged as incomplete.
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--md-sys-primary)]" />
-                    Completeness % = (fields present) / (3 × total reports).
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--md-sys-primary)]" />
-                    All metrics are computed from the current reports feed.
-                  </li>
-                </ul>
-              </Card>
             </>
+          )}
+
+          {activeTab === 'ledger' && (
+            <Card title="Ledger &amp; verification" icon={<IconChart />}>
+              <EmptyState message="Ledger panel (placeholder)" submessage="Pending entries, confirmed, disputed, validators. Connect backend /api/ledger/* per build packet." />
+            </Card>
+          )}
+
+          {activeTab === 'evidence' && (
+            <Card title="Evidence &amp; media" icon={<IconDoc />}>
+              <EmptyState message="Evidence panel (placeholder)" submessage="Upload, hash verification, request review. Connect backend /api/evidence/* per build packet." />
+            </Card>
+          )}
+
+          {activeTab === 'aiTasks' && (
+            <Card title="AI orchestration" icon={<IconChart />}>
+              <EmptyState message="AI tasks panel (placeholder)" submessage="Queued, completed, failed tasks; human approval. Connect backend /api/ai/* per build packet." />
+            </Card>
+          )}
+
+          {activeTab === 'users' && (
+            <Card title="Users &amp; roles" icon={<IconDoc />}>
+              <EmptyState message="User management (placeholder)" submessage="Moderators, roles, suspend/reinstate. Connect backend /api/users/*, /api/roles per build packet." />
+            </Card>
+          )}
+
+          {activeTab === 'integrations' && (
+            <Card title="Integrations &amp; endpoints" icon={<IconHeart />}>
+              <EmptyState message="Integrations panel (placeholder)" submessage="Endpoint health, test, reload. Connect backend /api/integrations, /api/endpoints per build packet." />
+            </Card>
+          )}
+
+          {activeTab === 'settings' && (
+            <Card title="Settings" icon={<IconDoc />}>
+              <p className="md-body-medium mb-4">API and environment configuration. Use the gear icon in the header to set API base URL and test connection.</p>
+              <button type="button" onClick={() => setSettingsOpen(true)} className="md-button-tonal h-10 px-4">
+                Open API configuration
+              </button>
+            </Card>
           )}
 
           {activeTab === 'sites' && (
@@ -1139,6 +1149,36 @@ export default function MasterEnterpriseDashboard() {
                       <> · Updated {new Date(selectedReport.updatedAt).toLocaleString()}</>
                     )}
                   </p>
+                </div>
+
+                {/* Series 2: AI recommendation drawer */}
+                <div className="border-t border-[var(--md-sys-outline-variant)] pt-3">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">AI recommendation</p>
+                  <p className="text-xs text-[var(--md-sys-on-surface-variant)]">Suggested category, risk score, and route appear here when /api/ai/recommendations is connected. Human approve/reject required.</p>
+                  <div className="mt-2 flex gap-2">
+                    <button type="button" className="rounded bg-[var(--md-sys-success-container)] px-2 py-1 text-xs font-medium text-[var(--md-sys-on-success-container)]">Approve</button>
+                    <button type="button" className="rounded bg-[var(--md-sys-error-container)] px-2 py-1 text-xs font-medium text-[var(--md-sys-on-error-container)]">Reject</button>
+                  </div>
+                </div>
+
+                {/* Series 2: Workflow timeline */}
+                <div className="border-t border-[var(--md-sys-outline-variant)] pt-3">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">Workflow timeline</p>
+                  <div className="space-y-1.5">
+                    {selectedReport.createdAt && (
+                      <div className="flex gap-2 text-xs">
+                        <span className="text-[var(--md-sys-on-surface-variant)]">{new Date(selectedReport.createdAt).toLocaleString()}</span>
+                        <span className="text-[var(--md-sys-on-surface)]">Submitted</span>
+                      </div>
+                    )}
+                    {selectedReport.updatedAt && selectedReport.updatedAt !== selectedReport.createdAt && (
+                      <div className="flex gap-2 text-xs">
+                        <span className="text-[var(--md-sys-on-surface-variant)]">{new Date(selectedReport.updatedAt).toLocaleString()}</span>
+                        <span className="text-[var(--md-sys-on-surface)]">Updated → {selectedReport.opsStatus || 'New'}</span>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-[var(--md-sys-on-surface-variant)]">Full timeline from /api/workflows when connected. Exportable for audit.</p>
+                  </div>
                 </div>
               </div>
             ) : (
