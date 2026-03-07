@@ -138,6 +138,7 @@ export default function MasterEnterpriseDashboard() {
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
   const [env, setEnv] = useState<'dev' | 'staging' | 'production'>('production');
   const [searchQuery, setSearchQuery] = useState('');
+  const [useDemoData, setUseDemoData] = useState(false);
 
   const showSnackbar = useCallback((message: string) => {
     setSnackbar({ message });
@@ -145,7 +146,27 @@ export default function MasterEnterpriseDashboard() {
     return () => clearTimeout(t);
   }, []);
 
+  const loadDemoData = useCallback(() => {
+    const now = new Date().toISOString();
+    const day = (d: number) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
+    setReports([
+      { reportId: 'demo-1', title: 'Sample report: Facility safety concern', description: 'Demo', severity: 'High', opsStatus: 'New', entityName: 'Site A', createdAt: day(2), updatedAt: now },
+      { reportId: 'demo-2', title: 'Sample report: Environmental follow-up', description: 'Demo', severity: 'Moderate', opsStatus: 'Investigating', entityName: 'Site B', createdAt: day(5), updatedAt: day(1) },
+      { reportId: 'demo-3', title: 'Sample report: Resolved case', description: 'Demo', severity: 'Low', opsStatus: 'Resolved', entityName: 'Site A', createdAt: day(14), updatedAt: day(3) },
+      { reportId: 'demo-4', title: 'Sample report: Pending evidence', description: 'Demo', severity: 'High', opsStatus: 'New', entityName: 'Site C', createdAt: day(1), updatedAt: now },
+      { reportId: 'demo-5', title: 'Sample report: Action taken', description: 'Demo', severity: 'Moderate', opsStatus: 'Action Taken', entityName: 'Site B', createdAt: day(7), updatedAt: day(2) },
+    ]);
+    setHealth({ ok: true, status: 200, latencyMs: 48 });
+    setProbes([{ name: 'health', ok: true, latencyMs: 12 }, { name: 'reportsFeed', ok: true, latencyMs: 85 }]);
+    setLastSync(new Date());
+    setUseDemoData(true);
+    setError(null);
+    showSnackbar('Demo data loaded');
+  }, [showSnackbar]);
+
   const effectiveBase = apiBaseOverride || getApiBase();
+  const isSetupMode = !effectiveBase && !useDemoData;
+  const hasData = reports.length > 0 || useDemoData;
   const configSource = apiBaseOverride ? 'browser' : (getApiBase() ? 'env' : null);
 
   const refresh = useCallback(async (overrideBase?: string) => {
@@ -420,41 +441,55 @@ export default function MasterEnterpriseDashboard() {
               D
             </div>
             <div className="min-w-0">
-              <h1 className="hq-title truncate">DPAL Headquarters</h1>
+              <h1 className="hq-title truncate">DPAL Enterprise HQ</h1>
               <p className="hq-subtitle truncate">
-                Enterprise command center · {effectiveBase ? 'Nexus connected' : 'No API'}
-                {lastSync && ` · ${lastSync.toLocaleTimeString()}`}
+                Central oversight for Nexus, Reports, Ledger, and monitoring services.
               </p>
             </div>
           </div>
           <div className="hq-status-strip flex flex-shrink-0 flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/5 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-[var(--hq-bar-on)]">
+              API: {effectiveBase || useDemoData ? 'Connected' : 'Not connected'}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/5 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-[var(--hq-bar-on)]">
+              Env: {env}
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/5 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-[var(--hq-bar-on)]">
+              Sync: {lastSync ? 'Live' : 'Idle'}
+            </span>
+            {alertCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#f28b82]/50 bg-[#f28b82]/20 px-2.5 py-1 text-[11px] font-medium text-[#f28b82]">
+                Alerts: {alertCount}
+              </span>
+            )}
             <select value={env} onChange={(e) => setEnv(e.target.value as 'dev' | 'staging' | 'production')} className="h-8 rounded border-0 bg-white/10 px-2 text-xs text-[var(--hq-bar-on)] focus:ring-1 focus:ring-white/30">
               <option value="dev">Dev</option>
               <option value="staging">Staging</option>
               <option value="production">Production</option>
             </select>
-            {effectiveBase && (
+            {(effectiveBase || useDemoData) && (
               <>
                 <span className={health?.ok ? 'text-[#81c995]' : 'text-[#f28b82]'}>
-                  {health?.ok ? '● API up' : '● API down'}
+                  {health?.ok ? '● API up' : useDemoData ? '● Demo' : '● API down'}
                 </span>
                 <span title="Connected sites">{effectiveBase ? 1 : 0} sites</span>
                 <span>{openCount} open</span>
-                {alertCount > 0 && <span className="text-[#f28b82]">{alertCount} alerts</span>}
                 <span title="Pending verification">0 pending</span>
               </>
             )}
             <input type="search" placeholder="Search…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-8 w-28 rounded border-0 bg-white/10 px-2 text-xs text-[var(--hq-bar-on)] placeholder:text-[var(--hq-bar-muted)] focus:ring-1 focus:ring-white/30 sm:w-36" />
             <span className="text-[10px] text-[var(--hq-bar-muted)]">{new Date().toLocaleTimeString()}</span>
-            <button type="button" onClick={() => setSettingsOpen((o) => !o)} className="rounded p-1.5 text-[var(--hq-bar-muted)] hover:bg-white/10 hover:text-[var(--hq-bar-on)]" title="API settings" aria-label="API settings">
+            <button type="button" onClick={() => setSettingsOpen((o) => !o)} className="rounded p-1.5 text-[var(--hq-bar-muted)] hover:bg-white/10 hover:text-[var(--hq-bar-on)]" title="Endpoint settings" aria-label="Endpoint settings">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94a.75.75 0 01.596 0cA2.251 2.251 0 0113.5 4.898c.848.128 1.705.264 2.55.364a.75.75 0 01.63 1.408A21.474 21.474 0 0112 9c-2.264 0-4.597.032-6.963.096a.75.75 0 01-.63-1.408 20.902 20.902 0 002.55-.364A2.251 2.251 0 019.594 3.94z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
               </svg>
             </button>
-            <button type="button" onClick={() => refresh()} disabled={loading} className="rounded bg-[var(--md-sys-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1557b0] disabled:opacity-50">
-              {loading ? 'Syncing…' : 'Sync now'}
-            </button>
+            {(effectiveBase || useDemoData) && (
+              <button type="button" onClick={() => effectiveBase && refresh()} disabled={loading || !effectiveBase} className="rounded bg-[var(--md-sys-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[#1557b0] disabled:opacity-50">
+                {loading ? 'Syncing…' : 'Sync now'}
+              </button>
+            )}
           </div>
         </div>
         {settingsOpen && (
@@ -499,65 +534,202 @@ export default function MasterEnterpriseDashboard() {
       </header>
 
       <div className="flex min-h-[calc(100vh-56px)]">
-        <aside className="hq-command-menu hidden flex-shrink-0 lg:block">
-          <nav className="sticky top-16 flex flex-col gap-0.5 py-3">
-            {commandMenuItems.map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() => { setActiveTab(item.id); if (item.id === 'alerts') setSelectedReport(null); }}
-                className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--md-sys-surface-container-high)] ${activeTab === item.id ? 'active' : 'text-[var(--md-sys-on-surface-variant)]'}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-        </aside>
+        {!isSetupMode && (
+          <aside className="hq-command-menu hidden flex-shrink-0 lg:block">
+            <nav className="sticky top-16 flex flex-col gap-0.5 py-3">
+              {commandMenuItems.map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={() => { setActiveTab(item.id); if (item.id === 'alerts') setSelectedReport(null); }}
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-[var(--md-sys-surface-container-high)] ${activeTab === item.id ? 'active' : 'text-[var(--md-sys-on-surface-variant)]'}`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          </aside>
+        )}
 
         <main className="min-w-0 flex-1 overflow-auto px-4 py-4 sm:px-6 sm:py-5">
-          {/* Mobile command chips */}
-          <div className="flex flex-wrap gap-2 pb-4 lg:hidden">
-            {commandMenuItems.map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`md-chip text-xs ${activeTab === item.id ? 'md-chip-selected' : ''}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Live intelligence strip — show on overview and reports */}
-          {(activeTab === 'overview' || activeTab === 'reports') && (
-            <div className="hq-live-intel mb-4">
-              <div className="intel-item">
-                <span className="intel-value text-[var(--md-sys-primary)]">{openCount}</span>
-                <span className="text-[var(--md-sys-on-surface-variant)]">Open cases</span>
-              </div>
-              <div className="intel-item">
-                <span className="intel-value text-[var(--hq-urgency-critical)]">{health?.ok ? 0 : 1}</span>
-                <span className="text-[var(--md-sys-on-surface-variant)]">Failures</span>
-              </div>
-              <div className="intel-item">
-                <span className="intel-value text-[var(--hq-urgency-dispute)]">{disputeCount}</span>
-                <span className="text-[var(--md-sys-on-surface-variant)]">Disputes</span>
-              </div>
-              <div className="intel-item">
-                <span className="intel-value text-[var(--hq-urgency-escalation)]">{criticalCount}</span>
-                <span className="text-[var(--md-sys-on-surface-variant)]">Escalations</span>
-              </div>
-              {alertCount > 0 && (
-                <div className="intel-item">
-                  <span className="intel-value text-[var(--hq-urgency-critical)]">{alertCount}</span>
-                  <span className="text-[var(--md-sys-on-surface-variant)]">Alerts</span>
+          {/* ——— SETUP MODE: Hero + setup cards + Next Actions ——— */}
+          {isSetupMode && (
+            <div className="mx-auto max-w-4xl space-y-6">
+              <section className="hq-hero-command rounded-2xl border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface)] p-6 shadow-md sm:p-8">
+                <h2 className="md-headline-medium mb-2 text-[var(--md-sys-on-surface)]">HQ is not connected yet</h2>
+                <p className="md-body-large mb-6 max-w-2xl text-[var(--md-sys-on-surface-variant)]">
+                  Connect a DPAL endpoint to activate reports, health probes, analytics, and live oversight.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={() => setSettingsOpen(true)} className="md-button-filled h-11 px-5">
+                    Connect API
+                  </button>
+                  <button type="button" onClick={loadDemoData} className="md-button-outlined h-11 px-5">
+                    Load sample data
+                  </button>
+                  <button type="button" onClick={() => setSettingsOpen(true)} className="md-button-tonal h-11 px-5 text-[var(--md-sys-on-surface-variant)]">
+                    Open endpoint settings
+                  </button>
                 </div>
-              )}
+              </section>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="md-card rounded-xl p-5">
+                  <h3 className="md-title-small mb-2 text-[var(--md-sys-on-surface)]">Endpoint configuration</h3>
+                  <p className="md-body-small mb-4 text-[var(--md-sys-on-surface-variant)]">Set your DPAL API base URL in settings or via environment variable.</p>
+                  <button type="button" onClick={() => setSettingsOpen(true)} className="md-button-tonal h-9 text-sm">Configure</button>
+                </div>
+                <div className="md-card rounded-xl p-5">
+                  <h3 className="md-title-small mb-2 text-[var(--md-sys-on-surface)]">Health probes</h3>
+                  <p className="md-body-small mb-4 text-[var(--md-sys-on-surface-variant)]">Run probes after connecting to verify API and feed availability.</p>
+                  <span className="md-body-small text-[var(--md-sys-outline)]">Connect API first</span>
+                </div>
+                <div className="md-card rounded-xl p-5">
+                  <h3 className="md-title-small mb-2 text-[var(--md-sys-on-surface)]">Reports feed</h3>
+                  <p className="md-body-small mb-4 text-[var(--md-sys-on-surface-variant)]">Reports load automatically once the API is connected and you sync.</p>
+                  <button type="button" onClick={loadDemoData} className="md-button-tonal h-9 text-sm">Load sample data</button>
+                </div>
+              </div>
+
+              <section className="md-card rounded-xl p-5">
+                <h3 className="md-title-medium mb-4 text-[var(--md-sys-on-surface)]">Next actions</h3>
+                <ul className="space-y-2">
+                  <li className="flex items-center gap-3 text-[var(--md-sys-on-surface-variant)]">
+                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--md-sys-primary-container)] text-[11px] font-semibold text-[var(--md-sys-primary)]">1</span>
+                    Connect main reports API
+                  </li>
+                  <li className="flex items-center gap-3 text-[var(--md-sys-on-surface-variant)]">
+                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--md-sys-primary-container)] text-[11px] font-semibold text-[var(--md-sys-primary)]">2</span>
+                    Run first health probe
+                  </li>
+                  <li className="flex items-center gap-3 text-[var(--md-sys-on-surface-variant)]">
+                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--md-sys-primary-container)] text-[11px] font-semibold text-[var(--md-sys-primary)]">3</span>
+                    Load sample reports (or sync from API)
+                  </li>
+                  <li className="flex items-center gap-3 text-[var(--md-sys-on-surface-variant)]">
+                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--md-sys-primary-container)] text-[11px] font-semibold text-[var(--md-sys-primary)]">4</span>
+                    Configure alert thresholds
+                  </li>
+                  <li className="flex items-center gap-3 text-[var(--md-sys-on-surface-variant)]">
+                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--md-sys-primary-container)] text-[11px] font-semibold text-[var(--md-sys-primary)]">5</span>
+                    Review dashboard settings
+                  </li>
+                </ul>
+              </section>
             </div>
           )}
 
-          {error && (
+          {/* ——— LIVE MODE: Nav (mobile only when not setup) + content ——— */}
+          {!isSetupMode && (
+            <>
+              {/* Single nav strip: sidebar on lg, chips on smaller */}
+              <div className="flex flex-wrap gap-2 pb-4 lg:hidden">
+                {commandMenuItems.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`md-chip text-xs ${activeTab === item.id ? 'md-chip-selected' : ''}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Hero: Operational Snapshot — only on overview */}
+              {activeTab === 'overview' && (
+                <section className="hq-hero-command mb-6 rounded-2xl border border-[var(--md-sys-outline-variant)] bg-[var(--md-sys-surface)] p-5 shadow-md sm:p-6">
+                  <h2 className="md-title-large mb-4 text-[var(--md-sys-on-surface)]">
+                    {useDemoData ? 'Demo mode — Operational snapshot' : 'Operational snapshot'}
+                  </h2>
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">
+                    <div>
+                      <p className="md-label-small text-[var(--md-sys-on-surface-variant)]">Total reports</p>
+                      <p className="md-headline-small font-semibold text-[var(--md-sys-on-surface)]">{reports.length}</p>
+                    </div>
+                    <div>
+                      <p className="md-label-small text-[var(--md-sys-on-surface-variant)]">Urgent</p>
+                      <p className="md-headline-small font-semibold text-[var(--hq-urgency-critical)]">{criticalCount}</p>
+                    </div>
+                    <div>
+                      <p className="md-label-small text-[var(--md-sys-on-surface-variant)]">Open</p>
+                      <p className="md-headline-small font-semibold text-[var(--md-sys-primary)]">{openCount}</p>
+                    </div>
+                    <div>
+                      <p className="md-label-small text-[var(--md-sys-on-surface-variant)]">Endpoint failures</p>
+                      <p className="md-headline-small font-semibold text-[var(--md-sys-on-surface)]">{health?.ok ? 0 : 1}</p>
+                    </div>
+                    <div>
+                      <p className="md-label-small text-[var(--md-sys-on-surface-variant)]">Last sync</p>
+                      <p className="md-headline-small font-semibold text-[var(--md-sys-on-surface)]">{lastSync ? lastSync.toLocaleTimeString() : '—'}</p>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* 3-column operational flow — overview only */}
+              {activeTab === 'overview' && (
+                <div className="mb-6 grid gap-4 md:grid-cols-3">
+                  <div className="md-card rounded-xl p-4">
+                    <h3 className="md-title-small mb-3 text-[var(--md-sys-on-surface)]">What needs attention</h3>
+                    <ul className="space-y-2 text-sm text-[var(--md-sys-on-surface-variant)]">
+                      <li>Urgent reports: {criticalCount}</li>
+                      <li>Failed probes: {probes.filter((p) => !p.ok).length}</li>
+                      <li>Pending evidence: 0</li>
+                      <li>Disputed ledger: {disputeCount}</li>
+                    </ul>
+                  </div>
+                  <div className="md-card rounded-xl p-4">
+                    <h3 className="md-title-small mb-3 text-[var(--md-sys-on-surface)]">System status</h3>
+                    <ul className="space-y-2 text-sm text-[var(--md-sys-on-surface-variant)]">
+                      <li>API: {health?.ok ? 'Up' : useDemoData ? 'Demo' : 'Down'}</li>
+                      <li>Latency: {health?.latencyMs != null ? `${health.latencyMs} ms` : '—'}</li>
+                      <li>Sync: {lastSync ? 'Live' : 'Idle'}</li>
+                      <li>Probes OK: {probes.filter((p) => p.ok).length}/{probes.length || 1}</li>
+                    </ul>
+                  </div>
+                  <div className="md-card rounded-xl p-4">
+                    <h3 className="md-title-small mb-3 text-[var(--md-sys-on-surface)]">Next actions</h3>
+                    <ul className="space-y-2 text-sm">
+                      {!effectiveBase && <li><button type="button" onClick={() => setSettingsOpen(true)} className="text-[var(--md-sys-primary)] underline">Connect reports API</button></li>}
+                      <li><button type="button" onClick={() => effectiveBase && runProbesNow()} disabled={!effectiveBase || probesLoading} className="text-[var(--md-sys-primary)] underline disabled:opacity-50">Run health probes</button></li>
+                      <li><button type="button" onClick={loadDemoData} className="text-[var(--md-sys-primary)] underline">Load sample data</button></li>
+                      <li>Configure alert thresholds</li>
+                      <li>Review flagged reports</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Live intelligence strip — overview and reports when we have data */}
+              {(activeTab === 'overview' || activeTab === 'reports') && hasData && (
+                <div className="hq-live-intel mb-4">
+                  <div className="intel-item">
+                    <span className="intel-value text-[var(--md-sys-primary)]">{openCount}</span>
+                    <span className="text-[var(--md-sys-on-surface-variant)]">Open cases</span>
+                  </div>
+                  <div className="intel-item">
+                    <span className="intel-value text-[var(--hq-urgency-critical)]">{health?.ok ? 0 : 1}</span>
+                    <span className="text-[var(--md-sys-on-surface-variant)]">Failures</span>
+                  </div>
+                  <div className="intel-item">
+                    <span className="intel-value text-[var(--hq-urgency-dispute)]">{disputeCount}</span>
+                    <span className="text-[var(--md-sys-on-surface-variant)]">Disputes</span>
+                  </div>
+                  <div className="intel-item">
+                    <span className="intel-value text-[var(--hq-urgency-escalation)]">{criticalCount}</span>
+                    <span className="text-[var(--md-sys-on-surface-variant)]">Escalations</span>
+                  </div>
+                  {alertCount > 0 && (
+                    <div className="intel-item">
+                      <span className="intel-value text-[var(--hq-urgency-critical)]">{alertCount}</span>
+                      <span className="text-[var(--md-sys-on-surface-variant)]">Alerts</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {error && (
             <div className="md-card flex items-center gap-3 border-l-4 border-[var(--md-sys-error)] bg-[var(--md-sys-error-container)] px-4 py-3 text-[var(--md-sys-on-error-container)]">
               <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
@@ -568,6 +740,35 @@ export default function MasterEnterpriseDashboard() {
 
           {activeTab === 'overview' && (
             <>
+              {!hasData ? (
+                <div className="md-card flex flex-col items-center justify-center rounded-xl border border-[var(--md-sys-outline-variant)] p-8 text-center">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--md-sys-surface-container-high)] text-[var(--md-sys-outline)]">
+                    <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                  </div>
+                  <h3 className="md-title-medium mb-2 text-[var(--md-sys-on-surface)]">No reports loaded</h3>
+                  <p className="md-body-medium mb-5 max-w-md text-[var(--md-sys-on-surface-variant)]">
+                    Connect your feed or use sample data to see the dashboard. Sync from your API or load demo data to get started.
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-3">
+                    <button type="button" onClick={loadDemoData} className="md-button-filled h-11 px-5">
+                      Load sample data
+                    </button>
+                    {effectiveBase && (
+                      <button type="button" onClick={() => refresh()} disabled={loading} className="md-button-outlined h-11 px-5 disabled:opacity-50">
+                        {loading ? 'Syncing…' : 'Sync from API'}
+                      </button>
+                    )}
+                    {!effectiveBase && (
+                      <button type="button" onClick={() => setSettingsOpen(true)} className="md-button-tonal h-11 px-5">
+                        Connect API
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
               <SectionTitle>Key metrics</SectionTitle>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="metric-box flex flex-col p-4 sm:p-6">
@@ -618,7 +819,6 @@ export default function MasterEnterpriseDashboard() {
                 </div>
               </div>
 
-              <SectionTitle>System health</SectionTitle>
               <Card
                 title="System health"
                 icon={<IconHeart />}
@@ -660,7 +860,6 @@ export default function MasterEnterpriseDashboard() {
                 )}
               </Card>
 
-              <SectionTitle>Recent reports</SectionTitle>
               <Card
                 title="Recent reports"
                 icon={<IconDoc />}
@@ -754,7 +953,7 @@ export default function MasterEnterpriseDashboard() {
                 </div>
               )}
 
-              <SectionTitle>Analytics</SectionTitle>
+              <h3 className="md-label-medium mb-3 uppercase tracking-wider text-[var(--md-sys-on-surface-variant)]">Analytics</h3>
               <div className="grid gap-6 lg:grid-cols-2">
                 <Card title="Reports by status" icon={<IconChart />}>
                   {byStatus.length ? (
@@ -815,6 +1014,8 @@ export default function MasterEnterpriseDashboard() {
                     </ResponsiveContainer>
                   </div>
                 </Card>
+              )}
+                </>
               )}
             </>
           )}
@@ -1092,9 +1293,12 @@ export default function MasterEnterpriseDashboard() {
               </Card>
             </>
           )}
+            </>
+          )}
         </main>
 
-        {/* Right: contextual detail inspector */}
+        {/* Right: contextual detail inspector — hidden in setup mode */}
+        {!isSetupMode && (
         <div className={`hq-inspector flex-shrink-0 border-t border-[var(--md-sys-outline-variant)] lg:border-t-0 ${selectedReport ? 'w-full lg:w-[360px]' : 'hidden xl:block xl:w-[320px]'}`}>
           <div className="hq-inspector-header sticky top-0 z-10 bg-[var(--md-sys-surface)]">
             {selectedReport ? 'Report detail' : 'Detail'}
@@ -1186,6 +1390,7 @@ export default function MasterEnterpriseDashboard() {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {snackbar && (

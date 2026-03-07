@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "HQ & QC Dashboard — DPAL Enterprise",
-  description: "HQ and Quality Control mission control for DPAL",
+  title: "DPAL Enterprise HQ",
+  description: "Central command, workflow, and oversight for Nexus, Reports, Ledger, and monitoring.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

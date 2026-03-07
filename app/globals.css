@@ -302,6 +302,11 @@ body {
   color: var(--hq-bar-muted, #9aa0a6);
   letter-spacing: 0.01em;
 }
+
+.hq-hero-command {
+  box-shadow: var(--md-sys-elevation-1);
+}
+
 .hq-status-strip {
   display: flex;
   align-items: center;

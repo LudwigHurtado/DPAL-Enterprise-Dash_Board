@@ -1,8 +1,8 @@
 import MasterEnterpriseDashboard from '@/pages/MasterEnterpriseDashboard';
 
 export const metadata = {
-  title: 'Master Enterprise Dashboard — DPAL Nexus',
-  description: 'Quality control, system health, and site monitoring for DPAL operations.',
+  title: 'DPAL Enterprise HQ',
+  description: 'Central oversight for Nexus, Reports, Ledger, and monitoring services.',
 };
 
 export default function EnterprisePage() {
