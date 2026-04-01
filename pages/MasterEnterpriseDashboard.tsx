@@ -10,6 +10,12 @@ import {
   type ProbeResult,
   type ReportItem,
 } from '@/src/lib/dpal-api';
+import {
+  getApiBaseUrl,
+  setApiBaseUrl,
+  getAdminSecret,
+  setAdminSecret,
+} from '@/src/lib/apiBase';
 import HelpCenterAdminTab from './HelpCenterAdminTab';
 import {
   ResponsiveContainer,
@@ -432,7 +438,7 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-const STORAGE_KEY = 'dpal_api_base_override';
+// URL/secret persistence is handled by src/lib/apiBase.ts (shared with all API modules)
 
 /* ══════════════════════════════════════════════════
    PLACEHOLDER MODULE
@@ -456,7 +462,8 @@ function PlaceholderModule({ icon, title, description }: { icon: string; title: 
 export default function MasterEnterpriseDashboard() {
   const [activeTab, setActiveTab]       = useState<TabId>('overview');
   const [railExpanded, setRailExpanded] = useState(false);
-  const [apiBase, setApiBase]           = useState('');
+  const [apiBase, setApiBase]             = useState('');
+  const [adminSec, setAdminSec]           = useState('');
   const [effectiveBase, setEffectiveBase] = useState('');
   const [useDemoData, setUseDemoData]   = useState(false);
   const [health, setHealth]             = useState<HealthResult | null>(null);
@@ -472,15 +479,13 @@ export default function MasterEnterpriseDashboard() {
     setTimeout(() => setSnack(''), 3500);
   };
 
-  // Load persisted API base
+  // Load persisted API base + admin secret from the shared resolver on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY) ?? '';
-      setApiBase(stored);
-    } catch { /* ignore */ }
-    const envBase = getApiBase();
-    const stored  = (() => { try { return localStorage.getItem(STORAGE_KEY) ?? ''; } catch { return ''; } })();
-    setEffectiveBase(stored || envBase);
+    const base   = getApiBaseUrl();
+    const secret = getAdminSecret();
+    setApiBase(base);
+    setAdminSec(secret);
+    setEffectiveBase(base);
   }, []);
 
   const sync = useCallback(async () => {
@@ -519,10 +524,12 @@ export default function MasterEnterpriseDashboard() {
   useEffect(() => { void sync(); }, []);  // eslint-disable-line
 
   const saveApiBase = () => {
-    try { localStorage.setItem(STORAGE_KEY, apiBase); } catch { /* ignore */ }
-    setEffectiveBase(apiBase || getApiBase());
+    setApiBaseUrl(apiBase);          // persists to localStorage for all API modules
+    setAdminSecret(adminSec);        // persists admin secret
+    const resolved = apiBase.trim() || getApiBase();
+    setEffectiveBase(resolved);
     setShowSettings(false);
-    toast('API base saved');
+    toast('API base saved — syncing…');
     setTimeout(() => void sync(), 200);
   };
 
@@ -849,25 +856,50 @@ export default function MasterEnterpriseDashboard() {
           <button className="m3-icon-btn" onClick={() => setShowSettings(false)}>✕</button>
         </div>
         <p style={{ fontSize: 13, color: 'var(--md-on-surf-var)', margin: '0 0 16px', lineHeight: 1.6 }}>
-          Enter your DPAL backend Railway URL. This will be used for health checks, reports feed, and admin endpoints.
+          Enter your DPAL backend Railway URL and admin secret. Settings are saved in your browser and shared across all dashboard tabs.
         </p>
+
+        {/* Backend URL */}
         <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--md-on-surf-var)', marginBottom: 6 }}>
-          Backend URL
+          Backend URL <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--md-outline)' }}>(NEXT_PUBLIC_DPAL_API_BASE)</span>
         </label>
         <input
           value={apiBase}
           onChange={e => setApiBase(e.target.value)}
           placeholder="https://your-backend.up.railway.app"
-          style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--md-outline-var)', borderRadius: 12, fontSize: 13, outline: 'none', marginBottom: 16, boxSizing: 'border-box' }}
+          style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--md-outline-var)', borderRadius: 12, fontSize: 13, outline: 'none', marginBottom: 14, boxSizing: 'border-box' }}
         />
-        <div style={{ display: 'flex', gap: 10 }}>
+
+        {/* Admin secret */}
+        <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--md-on-surf-var)', marginBottom: 6 }}>
+          Admin Secret <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--md-outline)' }}>(NEXT_PUBLIC_DPAL_ADMIN_SECRET)</span>
+        </label>
+        <input
+          type="password"
+          value={adminSec}
+          onChange={e => setAdminSec(e.target.value)}
+          placeholder="your-admin-secret"
+          style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--md-outline-var)', borderRadius: 12, fontSize: 13, outline: 'none', marginBottom: 18, boxSizing: 'border-box' }}
+        />
+
+        {/* Endpoint reference */}
+        <div style={{ background: 'var(--md-surf-con)', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 11, color: 'var(--md-on-surf-var)', lineHeight: 1.8 }}>
+          <strong style={{ color: 'var(--md-on-surf)', display: 'block', marginBottom: 4 }}>Endpoints used</strong>
+          <code style={{ display: 'block' }}>GET  /health</code>
+          <code style={{ display: 'block' }}>GET  /api/reports/feed</code>
+          <code style={{ display: 'block' }}>GET  /api/admin/help-reports</code>
+          <code style={{ display: 'block' }}>GET  /api/admin/help-reports/stats</code>
+          <code style={{ display: 'block' }}>PATCH /api/admin/help-reports/:id/status</code>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="m3-btn m3-btn-filled" onClick={saveApiBase}>💾 Save & Connect</button>
           <button className="m3-btn m3-btn-tonal" onClick={() => { setUseDemoData(true); setShowSettings(false); void sync(); }}>📦 Use Demo Data</button>
           <button className="m3-btn m3-btn-text" onClick={() => setShowSettings(false)}>Cancel</button>
         </div>
         {effectiveBase && (
           <p style={{ fontSize: 11, color: 'var(--md-sec)', fontWeight: 700, marginTop: 12 }}>
-            ✓ Currently connected: {effectiveBase}
+            ✓ Connected: {effectiveBase}
           </p>
         )}
       </div>
@@ -1008,17 +1040,54 @@ export default function MasterEnterpriseDashboard() {
             {activeTab === 'audit'          && <PlaceholderModule icon="📜" title="Audit & Compliance" description="Full actor-action-state audit trail filterable by actor, object, date, action type, and jurisdiction." />}
             {activeTab === 'integrations'   && <PlaceholderModule icon="🔌" title="Integrations" description="Service registry, base URLs, health paths, auth methods, and endpoint testing." />}
             {activeTab === 'settings'       && (
-              <div style={{ maxWidth: 600 }}>
-                <div className="m3-card" style={{ padding: 28 }}>
-                  <h2 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 20px' }}>⚙️ API Configuration</h2>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--md-on-surf-var)', marginBottom: 6 }}>Backend URL</label>
-                  <input value={apiBase} onChange={e => setApiBase(e.target.value)} placeholder="https://your-backend.up.railway.app"
-                    style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--md-outline-var)', borderRadius: 12, fontSize: 14, outline: 'none', marginBottom: 16, boxSizing: 'border-box' }} />
+              <div style={{ maxWidth: 640 }}>
+                <div className="m3-card" style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>⚙️ API Configuration</h2>
+                  <p style={{ fontSize: 13, color: 'var(--md-on-surf-var)', margin: 0, lineHeight: 1.6 }}>
+                    Settings are saved in browser storage and used by all dashboard tabs — Health, Reports, Help Center, and Admin actions.
+                  </p>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--md-on-surf-var)', marginBottom: 6 }}>
+                      Backend URL <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(NEXT_PUBLIC_DPAL_API_BASE)</span>
+                    </label>
+                    <input value={apiBase} onChange={e => setApiBase(e.target.value)}
+                      placeholder="https://your-backend.up.railway.app"
+                      style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--md-outline-var)', borderRadius: 12, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--md-on-surf-var)', marginBottom: 6 }}>
+                      Admin Secret <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(NEXT_PUBLIC_DPAL_ADMIN_SECRET)</span>
+                    </label>
+                    <input type="password" value={adminSec} onChange={e => setAdminSec(e.target.value)}
+                      placeholder="your-admin-secret"
+                      style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--md-outline-var)', borderRadius: 12, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+                  </div>
+
+                  {/* Live status */}
+                  {effectiveBase && (
+                    <div style={{ background: 'var(--md-sec-con)', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: 'var(--md-on-sec-con)', fontWeight: 700 }}>
+                      ✓ Connected to: {effectiveBase}
+                    </div>
+                  )}
+
+                  {/* Endpoint reference */}
+                  <div style={{ background: 'var(--md-surf-con)', borderRadius: 10, padding: '10px 14px', fontSize: 11, color: 'var(--md-on-surf-var)', lineHeight: 1.9 }}>
+                    <strong style={{ color: 'var(--md-on-surf)', display: 'block', marginBottom: 4 }}>Endpoints used by this dashboard</strong>
+                    <code style={{ display: 'block' }}>GET  /health</code>
+                    <code style={{ display: 'block' }}>GET  /api/reports/feed</code>
+                    <code style={{ display: 'block' }}>GET  /api/admin/help-reports?…</code>
+                    <code style={{ display: 'block' }}>GET  /api/admin/help-reports/stats</code>
+                    <code style={{ display: 'block' }}>PATCH /api/admin/help-reports/:id/status</code>
+                    <code style={{ display: 'block' }}>POST  /api/admin/help-reports/:id/note</code>
+                    <code style={{ display: 'block' }}>PATCH /api/admin/help-reports/:id/assign</code>
+                  </div>
+
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <button className="m3-btn m3-btn-filled" onClick={saveApiBase}>💾 Save & Connect</button>
                     <button className="m3-btn m3-btn-tonal" onClick={() => { setUseDemoData(true); void sync(); }}>📦 Use Demo Data</button>
                   </div>
-                  {effectiveBase && <p style={{ fontSize: 12, color: 'var(--md-sec)', fontWeight: 700, marginTop: 12 }}>✓ Currently: {effectiveBase}</p>}
                 </div>
               </div>
             )}

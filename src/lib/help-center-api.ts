@@ -1,43 +1,36 @@
 /**
  * DPAL Help Center API — typed client for the Enterprise Dashboard.
- * Reads admin help-report endpoints from the DPAL backend.
- * Backend URL: NEXT_PUBLIC_DPAL_API_BASE
+ * Base URL: shared resolver (localStorage override → NEXT_PUBLIC_DPAL_API_BASE).
+ * Admin secret: shared resolver (localStorage override → NEXT_PUBLIC_DPAL_ADMIN_SECRET).
  */
+import { getApiBaseUrl, adminHeaders } from './apiBase';
 
-const getBase = (): string =>
-  (typeof process !== 'undefined' && (process.env?.NEXT_PUBLIC_DPAL_API_BASE as string)?.trim()) || '';
-
-const adminHeaders = (): HeadersInit => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${process.env.NEXT_PUBLIC_DPAL_ADMIN_SECRET ?? ''}`,
-});
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type HelpReportStatus =
   | 'submitted' | 'under_review' | 'awaiting_contact' | 'awaiting_documents'
-  | 'assigned' | 'in_progress' | 'referred_out' | 'resolved'
-  | 'closed' | 'rejected' | 'duplicate';
+  | 'assigned'  | 'in_progress'  | 'referred_out'     | 'resolved'
+  | 'closed'    | 'rejected'     | 'duplicate';
 
 export type HelpReportUrgency = 'low' | 'normal' | 'high' | 'urgent' | 'emergency';
 
 export interface HelpReportRow {
-  id:           string;
-  reportNumber: string;
-  category:     string;
-  subcategory?: string;
-  title:        string;
-  urgency:      HelpReportUrgency;
-  status:       HelpReportStatus;
-  isAnonymous:  boolean;
-  isDuplicate:  boolean;
-  createdAt:    string;
-  updatedAt:    string;
-  contact?:     { fullName?: string; email?: string; phone?: string } | null;
-  location?:    { city?: string; stateRegion?: string; country?: string } | null;
-  attachments:  { id: string }[];
-  assignments:  { assignedTo: string; team?: string }[];
-  _count:       { notes: number; statusHistory: number };
+  id:            string;
+  reportNumber:  string;
+  category:      string;
+  subcategory?:  string;
+  title:         string;
+  urgency:       HelpReportUrgency;
+  status:        HelpReportStatus;
+  isAnonymous:   boolean;
+  isDuplicate:   boolean;
+  createdAt:     string;
+  updatedAt:     string;
+  contact?:      { fullName?: string; email?: string; phone?: string } | null;
+  location?:     { city?: string; stateRegion?: string; country?: string } | null;
+  attachments:   { id: string }[];
+  assignments:   { assignedTo: string; team?: string }[];
+  _count:        { notes: number; statusHistory: number };
 }
 
 export interface HelpReportDetail extends HelpReportRow {
@@ -48,20 +41,20 @@ export interface HelpReportDetail extends HelpReportRow {
 }
 
 export interface AdminListResult {
-  ok:   boolean;
-  data: HelpReportRow[];
-  meta: { total: number; page: number; limit: number; totalPages: number };
+  ok:     boolean;
+  data:   HelpReportRow[];
+  meta:   { total: number; page: number; limit: number; totalPages: number };
   error?: string;
 }
 
 export interface HelpStatsResult {
-  ok:    boolean;
-  stats: {
-    total:      number;
-    todayCount: number;
-    byStatus:   Record<string, number>;
-    byUrgency:  Record<string, number>;
-    byCategory: { category: string; count: number }[];
+  ok:     boolean;
+  stats:  {
+    total:       number;
+    todayCount:  number;
+    byStatus:    Record<string, number>;
+    byUrgency:   Record<string, number>;
+    byCategory:  { category: string; count: number }[];
   };
   error?: string;
 }
@@ -80,11 +73,17 @@ export interface AdminListParams {
   sortDir?:    'asc' | 'desc';
 }
 
-// ─── API functions ─────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────────
+
+function noBase(): { ok: false; data: []; meta: { total: 0; page: 1; limit: 25; totalPages: 0 } } {
+  return { ok: false, data: [], meta: { total: 0, page: 1, limit: 25, totalPages: 0 } };
+}
+
+// ─── API functions ──────────────────────────────────────────────────────────────
 
 export async function getHelpReports(params: AdminListParams = {}): Promise<AdminListResult> {
-  const base = getBase();
-  if (!base) return { ok: false, data: [], meta: { total: 0, page: 1, limit: 25, totalPages: 0 } };
+  const base = getApiBaseUrl();
+  if (!base) return noBase();
 
   const search = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => { if (v != null) search.set(k, String(v)); });
@@ -94,16 +93,16 @@ export async function getHelpReports(params: AdminListParams = {}): Promise<Admi
       headers: adminHeaders(),
       cache: 'no-store',
     });
-    if (!res.ok) return { ok: false, data: [], meta: { total: 0, page: 1, limit: 25, totalPages: 0 }, error: `HTTP ${res.status}` };
+    if (!res.ok) return { ...noBase(), error: `HTTP ${res.status}` };
     return (await res.json()) as AdminListResult;
   } catch (e) {
-    return { ok: false, data: [], meta: { total: 0, page: 1, limit: 25, totalPages: 0 }, error: String(e) };
+    return { ...noBase(), error: String(e) };
   }
 }
 
 export async function getHelpReportDetail(id: string): Promise<{ ok: boolean; report?: HelpReportDetail; error?: string }> {
-  const base = getBase();
-  if (!base) return { ok: false, error: 'No API base' };
+  const base = getApiBaseUrl();
+  if (!base) return { ok: false, error: 'No API base configured' };
   try {
     const res = await fetch(`${base}/api/admin/help-reports/${id}`, { headers: adminHeaders(), cache: 'no-store' });
     if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
@@ -114,20 +113,21 @@ export async function getHelpReportDetail(id: string): Promise<{ ok: boolean; re
 }
 
 export async function getHelpStats(): Promise<HelpStatsResult> {
-  const base = getBase();
-  if (!base) return { ok: false, stats: { total: 0, todayCount: 0, byStatus: {}, byUrgency: {}, byCategory: [] } };
+  const base = getApiBaseUrl();
+  const empty: HelpStatsResult = { ok: false, stats: { total: 0, todayCount: 0, byStatus: {}, byUrgency: {}, byCategory: [] } };
+  if (!base) return empty;
   try {
     const res = await fetch(`${base}/api/admin/help-reports/stats`, { headers: adminHeaders(), cache: 'no-store' });
-    if (!res.ok) return { ok: false, stats: { total: 0, todayCount: 0, byStatus: {}, byUrgency: {}, byCategory: [] }, error: `HTTP ${res.status}` };
+    if (!res.ok) return { ...empty, error: `HTTP ${res.status}` };
     return (await res.json()) as HelpStatsResult;
   } catch (e) {
-    return { ok: false, stats: { total: 0, todayCount: 0, byStatus: {}, byUrgency: {}, byCategory: [] }, error: String(e) };
+    return { ...empty, error: String(e) };
   }
 }
 
 export async function updateHelpReportStatus(id: string, status: HelpReportStatus, reason?: string): Promise<{ ok: boolean; error?: string }> {
-  const base = getBase();
-  if (!base) return { ok: false, error: 'No API base' };
+  const base = getApiBaseUrl();
+  if (!base) return { ok: false, error: 'No API base configured' };
   try {
     const res = await fetch(`${base}/api/admin/help-reports/${id}/status`, {
       method: 'PATCH',
@@ -142,8 +142,8 @@ export async function updateHelpReportStatus(id: string, status: HelpReportStatu
 }
 
 export async function addHelpReportNote(id: string, body: string, noteType = 'internal'): Promise<{ ok: boolean; error?: string }> {
-  const base = getBase();
-  if (!base) return { ok: false, error: 'No API base' };
+  const base = getApiBaseUrl();
+  if (!base) return { ok: false, error: 'No API base configured' };
   try {
     const res = await fetch(`${base}/api/admin/help-reports/${id}/note`, {
       method: 'POST',
@@ -158,8 +158,8 @@ export async function addHelpReportNote(id: string, body: string, noteType = 'in
 }
 
 export async function assignHelpReport(id: string, assignedTo: string, team?: string): Promise<{ ok: boolean; error?: string }> {
-  const base = getBase();
-  if (!base) return { ok: false, error: 'No API base' };
+  const base = getApiBaseUrl();
+  if (!base) return { ok: false, error: 'No API base configured' };
   try {
     const res = await fetch(`${base}/api/admin/help-reports/${id}/assign`, {
       method: 'PATCH',
