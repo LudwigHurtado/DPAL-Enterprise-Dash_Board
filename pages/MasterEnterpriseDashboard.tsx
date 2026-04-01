@@ -2,14 +2,15 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  checkHealth,
-  getReportsFeed,
-  getApiBase,
-  runProbes,
-  type HealthResult,
-  type ProbeResult,
-  type ReportItem,
+ checkHealth,
+ getReportsFeed,
+ getApiBase,
+ runProbes,
+ type HealthResult,
+ type ProbeResult,
+ type ReportItem,
 } from '@/src/lib/dpal-api';
+import HelpCenterAdminTab from './HelpCenterAdminTab';
 import {
   ResponsiveContainer,
   LineChart,
@@ -27,7 +28,7 @@ import {
 
 const STORAGE_KEY = 'dpal_api_base_override';
 
-type TabId = 'overview' | 'sites' | 'reports' | 'triage' | 'ledger' | 'evidence' | 'investigations' | 'alerts' | 'aiTasks' | 'users' | 'audit' | 'integrations' | 'settings';
+type TabId = 'overview' | 'sites' | 'reports' | 'triage' | 'helpCenter' | 'ledger' | 'evidence' | 'investigations' | 'alerts' | 'aiTasks' | 'users' | 'audit' | 'integrations' | 'settings';
 
 const STATUS_COLORS: Record<string, string> = {
   New: '#f29900',
@@ -395,11 +396,12 @@ export default function MasterEnterpriseDashboard() {
   const disputeCount = reports.filter((r) => (r.opsStatus || '') === 'Action Taken').length;
   const alertCount = reports.filter((r) => (r.opsStatus || '') === 'New' && (r.severity || '').toLowerCase() === 'high').length;
 
-  const commandMenuItems: { id: TabId; label: string }[] = [
+  const commandMenuItems: { id: TabId; label: string; badge?: number }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'sites', label: 'Sites' },
     { id: 'reports', label: 'Reports' },
     { id: 'triage', label: 'Triage' },
+    { id: 'helpCenter', label: '🎫 Help Center' },
     { id: 'ledger', label: 'Ledger' },
     { id: 'evidence', label: 'Evidence' },
     { id: 'investigations', label: 'Investigations' },
@@ -1198,6 +1200,23 @@ export default function MasterEnterpriseDashboard() {
                 ))}
               </div>
             </>
+          )}
+
+          {activeTab === 'helpCenter' && (
+            <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', overflow: 'hidden', borderRadius: 12, border: '1px solid #E5E7EB', background: 'white' }}>
+              <div style={{ padding: '12px 18px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, background: '#0077C8' }}>
+                <span style={{ fontSize: 18 }}>🎫</span>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 900, color: 'white', margin: 0, letterSpacing: '0.04em' }}>Help Center — Report Management</p>
+                  <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.2em', margin: '2px 0 0' }}>
+                    Live intake from DPAL frontend · Supabase Postgres · Prisma ORM · Zod validated
+                  </p>
+                </div>
+              </div>
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <HelpCenterAdminTab />
+              </div>
+            </div>
           )}
 
           {activeTab === 'ledger' && (
