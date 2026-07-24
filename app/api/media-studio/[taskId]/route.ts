@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   attachMediaStudioSession,
-  getMoneyPrinterJob,
+  getMediaRenderJob,
   isMediaStudioAuthorized,
+  MediaRendererError,
   MediaStudioValidationError,
-  MoneyPrinterError,
-} from "@/src/lib/moneyprinter";
+} from "@/src/lib/media-renderer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ function errorResponse(error: unknown): NextResponse {
   if (error instanceof MediaStudioValidationError) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
   }
-  if (error instanceof MoneyPrinterError) {
+  if (error instanceof MediaRendererError) {
     const status = error.statusCode >= 400 && error.statusCode <= 599 ? error.statusCode : 502;
     return NextResponse.json({ ok: false, error: error.message }, { status });
   }
@@ -31,14 +31,14 @@ export async function GET(
 ): Promise<NextResponse> {
   if (!isMediaStudioAuthorized(request)) {
     return NextResponse.json(
-      { ok: false, error: "Media Studio access token required.", requiresAccessToken: true },
+      { ok: false, error: "Evidence Studio access token required.", requiresAccessToken: true },
       { status: 401 },
     );
   }
 
   try {
     const { taskId } = await context.params;
-    const job = await getMoneyPrinterJob(taskId);
+    const job = await getMediaRenderJob(taskId);
     return attachMediaStudioSession(NextResponse.json({ ok: true, job }));
   } catch (error) {
     return errorResponse(error);
