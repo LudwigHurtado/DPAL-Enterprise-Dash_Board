@@ -1,0 +1,62 @@
+name: Evidence Studio CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/media-studio/**"
+      - "app/api/media-studio/**"
+      - "src/lib/media-renderer.ts"
+      - "src/lib/moneyprinter.ts"
+      - "app/page.tsx"
+      - "app/enterprise/page.tsx"
+      - ".env.local.example"
+      - "README.md"
+      - "docs/DPAL_EVIDENCE_STUDIO.md"
+      - "docs/MONEYPRINTER_TURBO.md"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/evidence-studio-ci.yml"
+  push:
+    branches:
+      - "feature/moneyprinter-turbo-integration"
+    paths:
+      - "app/media-studio/**"
+      - "app/api/media-studio/**"
+      - "src/lib/media-renderer.ts"
+      - "src/lib/moneyprinter.ts"
+      - "app/page.tsx"
+      - "app/enterprise/page.tsx"
+      - ".env.local.example"
+      - "README.md"
+      - "docs/DPAL_EVIDENCE_STUDIO.md"
+      - "docs/MONEYPRINTER_TURBO.md"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/evidence-studio-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-studio-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build Next.js application
+        run: npm run build
