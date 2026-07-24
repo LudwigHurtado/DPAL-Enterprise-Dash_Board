@@ -1,0 +1,65 @@
+name: Enable Railway FFmpeg for Evidence Studio
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/enable-railway-ffmpeg.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      PROJECT_ID: 2048ef16-f61f-4908-91d5-a10272b6a934
+      ENVIRONMENT_ID: e0bbfc3b-876d-4694-9f56-428d87f581e4
+      SERVICE_ID: 6f486eff-edf3-41af-83bf-a0b5d51bcaec
+    steps:
+      - name: Verify Railway token is present
+        run: test -n "$RAILWAY_TOKEN"
+
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli
+
+      - name: Link production web service
+        run: railway link --project "$PROJECT_ID" --environment "$ENVIRONMENT_ID" --service "$SERVICE_ID"
+
+      - name: Configure Railpack FFmpeg packages
+        run: |
+          railway variable set RAILPACK_BUILD_APT_PACKAGES=ffmpeg --skip-deploys --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID"
+          railway variable set RAILPACK_DEPLOY_APT_PACKAGES=ffmpeg --skip-deploys --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID"
+          railway variable set MEDIA_STUDIO_MAX_CONCURRENT_RENDERS=1 --skip-deploys --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID"
+
+      - name: Confirm non-secret configuration
+        run: |
+          railway variable list --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID" --kv \
+            | grep -E '^(RAILPACK_BUILD_APT_PACKAGES|RAILPACK_DEPLOY_APT_PACKAGES|MEDIA_STUDIO_MAX_CONCURRENT_RENDERS)='
+
+      - name: Redeploy Railway web service
+        run: railway redeploy --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID" --yes
+
+      - name: Wait for Evidence Studio renderer
+        run: |
+          ready=0
+          for attempt in $(seq 1 90); do
+            code=$(curl --silent --show-error --output /tmp/health.json --write-out '%{http_code}' https://web-production-a27b.up.railway.app/api/deepal/media-studio || true)
+            echo "attempt=$attempt http=$code body=$(cat /tmp/health.json 2>/dev/null || true)"
+            if [ "$code" = "200" ]; then
+              if python - <<'PY'
+          import json
+          data=json.load(open('/tmp/health.json'))
+          raise SystemExit(0 if data.get('rendererReady') is True else 1)
+          PY
+              then
+                ready=1
+                break
+              fi
+            fi
+            sleep 10
+          done
+          test "$ready" = "1"
