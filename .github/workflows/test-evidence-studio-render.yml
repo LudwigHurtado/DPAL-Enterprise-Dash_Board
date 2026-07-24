@@ -1,0 +1,145 @@
+name: Test Evidence Studio Render
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/test-evidence-studio-render.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Validate Vercel credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            [ -n "${!name:-}" ] || { echo "::error::$name is missing"; exit 1; }
+          done
+
+      - name: Discover production deployment URL
+        id: deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/project_url.txt
+          import json, os, urllib.request
+          token=os.environ['VERCEL_TOKEN']
+          org=os.environ['VERCEL_ORG_ID']
+          project=os.environ['VERCEL_PROJECT_ID']
+          req=urllib.request.Request(
+              f'https://api.vercel.com/v9/projects/{project}?teamId={org}',
+              headers={'Authorization': f'Bearer {token}'},
+          )
+          with urllib.request.urlopen(req, timeout=30) as r:
+              data=json.load(r)
+          target=(data.get('targets') or {}).get('production') or {}
+          aliases=target.get('alias') or []
+          url=aliases[0] if aliases else target.get('url')
+          if not url:
+              raise SystemExit('No production deployment URL found for the Vercel project.')
+          if not url.startswith('http'):
+              url='https://' + url
+          print(url.rstrip('/'))
+          PY
+          BASE_URL=$(cat /tmp/project_url.txt)
+          echo "base_url=$BASE_URL" >> "$GITHUB_OUTPUT"
+          echo "Testing deployment: $BASE_URL"
+
+      - name: Check Evidence Studio renderer health
+        id: health
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL='${{ steps.deployment.outputs.base_url }}'
+          status=$(curl --silent --show-error --output /tmp/health.json --write-out '%{http_code}' "$BASE_URL/api/media-studio")
+          cat /tmp/health.json
+          [ "$status" = "200" ] || { echo "::error::Health check returned HTTP $status"; exit 1; }
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/health.json'))
+          if data.get('ok') is not True:
+              raise SystemExit(data.get('error') or 'Evidence Studio health check failed.')
+          print('Evidence Studio renderer is online.')
+          PY
+
+      - name: Submit Densu Delta controlled test render
+        id: render
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL='${{ steps.deployment.outputs.base_url }}'
+          cat > /tmp/render.json <<'JSON'
+          {
+            "projectReference":"DENSU-DELTA-LIVE-TEST-001",
+            "title":"Densu Delta Mangrove Monitoring Test",
+            "script":"This controlled DPAL Evidence Studio test documents mangrove restoration monitoring in the Densu Delta. It verifies narration, subtitles, illustrative environmental footage, protected playback, and production record generation. This draft contains no verified project claims and requires human review before publication.",
+            "evidenceReferences":"TEST-ONLY-NO-PROJECT-CLAIMS",
+            "visualKeywords":"Ghana mangrove restoration, coastal wetland monitoring, mangrove seedlings, environmental field team",
+            "aspect":"16:9",
+            "language":"en",
+            "voiceName":"en-US-JennyNeural-Female",
+            "source":"pexels",
+            "subtitleEnabled":true,
+            "backgroundMusic":false,
+            "reviewConfirmed":true
+          }
+          JSON
+          status=$(curl --silent --show-error --output /tmp/render-response.json --write-out '%{http_code}' \
+            -X POST "$BASE_URL/api/media-studio" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/render.json)
+          cat /tmp/render-response.json
+          [ "$status" = "202" ] || { echo "::error::Render submission returned HTTP $status"; exit 1; }
+          TASK_ID=$(python - <<'PY'
+          import json
+          data=json.load(open('/tmp/render-response.json'))
+          print((data.get('job') or {}).get('id') or '')
+          PY
+          )
+          [ -n "$TASK_ID" ] || { echo '::error::No task ID returned'; exit 1; }
+          echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
+          echo "Queued task: $TASK_ID"
+
+      - name: Poll until render completes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_URL='${{ steps.deployment.outputs.base_url }}'
+          TASK_ID='${{ steps.render.outputs.task_id }}'
+          for attempt in $(seq 1 150); do
+            sleep 8
+            curl --silent --show-error "$BASE_URL/api/media-studio/$TASK_ID" -o /tmp/status.json
+            python - <<'PY'
+          import json
+          data=json.load(open('/tmp/status.json'))
+          job=data.get('job') or {}
+          print(f"status={job.get('status')} progress={job.get('progress')} outputs={len(job.get('outputs') or [])}")
+          PY
+            STATUS=$(python - <<'PY'
+          import json
+          print((json.load(open('/tmp/status.json')).get('job') or {}).get('status') or '')
+          PY
+          )
+            if [ "$STATUS" = "completed" ]; then
+              cat /tmp/status.json
+              exit 0
+            fi
+            if [ "$STATUS" = "failed" ]; then
+              cat /tmp/status.json
+              echo '::error::Renderer reported failure'
+              exit 1
+            fi
+          done
+          echo '::error::Render did not complete within 20 minutes'
+          exit 1
