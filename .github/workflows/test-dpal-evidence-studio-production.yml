@@ -1,0 +1,191 @@
+name: Test DPAL Evidence Studio Production
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/test-dpal-evidence-studio-production.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BASE_URL: https://www.dpal.info
+    steps:
+      - name: Wait for production renderer health
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 60); do
+            code=$(curl --silent --show-error --output /tmp/health.json --write-out '%{http_code}' "$BASE_URL/api/deepal/media-studio" || true)
+            echo "health attempt=$attempt http=$code body=$(cat /tmp/health.json 2>/dev/null || true)"
+            if [ "$code" = "200" ]; then
+              if python - <<'PY'
+          import json
+          data=json.load(open('/tmp/health.json'))
+          raise SystemExit(0 if data.get('ok') is True and data.get('rendererReady') is True else 1)
+          PY
+              then
+                ready=1
+                break
+              fi
+            fi
+            sleep 10
+          done
+          [ "$ready" = "1" ] || { echo '::error::Production renderer did not become ready'; exit 1; }
+
+      - name: Submit controlled Densu Delta render
+        id: submit
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/render.json <<'JSON'
+          {
+            "projectReference":"DENSU-DELTA-LIVE-TEST-001",
+            "title":"Densu Delta Mangrove Monitoring Test",
+            "script":"This controlled DPAL Evidence Studio test documents mangrove restoration monitoring in the Densu Delta. It verifies narration, readable captions, branded environmental scenes, playback, download, and production record generation. This draft contains no verified project claims and requires human review before publication.",
+            "evidenceReferences":"TEST-ONLY-NO-PROJECT-CLAIMS",
+            "visualKeywords":"Ghana mangrove restoration, coastal wetland monitoring, mangrove seedlings, environmental field team",
+            "aspect":"16:9",
+            "language":"en",
+            "voiceName":"Server-configured Chatterbox voice",
+            "source":"native",
+            "subtitleEnabled":true,
+            "backgroundMusic":false,
+            "reviewConfirmed":true
+          }
+          JSON
+          code=$(curl --silent --show-error --output /tmp/submit.json --write-out '%{http_code}' \
+            -X POST "$BASE_URL/api/deepal/media-studio" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/render.json)
+          cat /tmp/submit.json
+          [ "$code" = "202" ] || { echo "::error::Render submit returned HTTP $code"; exit 1; }
+          TASK_ID=$(python - <<'PY'
+          import json
+          print((json.load(open('/tmp/submit.json')).get('job') or {}).get('id') or '')
+          PY
+          )
+          [ -n "$TASK_ID" ] || { echo '::error::No task ID returned'; exit 1; }
+          echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
+          echo "Queued task: $TASK_ID"
+
+      - name: Poll render to completion
+        id: poll
+        shell: bash
+        run: |
+          set -euo pipefail
+          TASK_ID='${{ steps.submit.outputs.task_id }}'
+          for attempt in $(seq 1 180); do
+            sleep 5
+            code=$(curl --silent --show-error --output /tmp/status.json --write-out '%{http_code}' "$BASE_URL/api/deepal/media-studio/$TASK_ID")
+            [ "$code" = "200" ] || { echo "status attempt=$attempt http=$code"; continue; }
+            python - <<'PY'
+          import json
+          data=json.load(open('/tmp/status.json'))
+          job=data.get('job') or {}
+          print(f"status={job.get('status')} progress={job.get('progress')} queue={job.get('queuePosition')} outputs={len(job.get('outputs') or [])} voice={job.get('voiceIncluded')}")
+          PY
+            STATUS=$(python - <<'PY'
+          import json
+          print((json.load(open('/tmp/status.json')).get('job') or {}).get('status') or '')
+          PY
+          )
+            if [ "$STATUS" = "completed" ]; then
+              OUTPUT=$(python - <<'PY'
+          import json
+          outputs=(json.load(open('/tmp/status.json')).get('job') or {}).get('outputs') or []
+          print(outputs[0] if outputs else '')
+          PY
+              )
+              [ -n "$OUTPUT" ] || { echo '::error::Completed job has no output'; exit 1; }
+              case "$OUTPUT" in
+                http*) OUTPUT_URL="$OUTPUT" ;;
+                *) OUTPUT_URL="$BASE_URL$OUTPUT" ;;
+              esac
+              echo "output_url=$OUTPUT_URL" >> "$GITHUB_OUTPUT"
+              cat /tmp/status.json
+              exit 0
+            fi
+            if [ "$STATUS" = "failed" ]; then
+              cat /tmp/status.json
+              echo '::error::Renderer reported failure'
+              exit 1
+            fi
+          done
+          echo '::error::Render did not complete within 15 minutes'
+          exit 1
+
+      - name: Download and validate MP4
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT_URL='${{ steps.poll.outputs.output_url }}'
+          curl --fail --location --show-error "$OUTPUT_URL" --output /tmp/densu-delta-evidence-studio.mp4
+          bytes=$(wc -c < /tmp/densu-delta-evidence-studio.mp4)
+          echo "Downloaded MP4 bytes=$bytes"
+          [ "$bytes" -gt 50000 ] || { echo '::error::MP4 is unexpectedly small'; exit 1; }
+          python - <<'PY'
+          data=open('/tmp/densu-delta-evidence-studio.mp4','rb').read(64)
+          if b'ftyp' not in data:
+              raise SystemExit('MP4 ftyp signature not found.')
+          print('MP4 container signature verified.')
+          PY
+          range_code=$(curl --silent --show-error --output /tmp/range.bin --write-out '%{http_code}' -H 'Range: bytes=0-1023' "$OUTPUT_URL")
+          echo "Range request HTTP $range_code bytes=$(wc -c < /tmp/range.bin)"
+          [ "$range_code" = "206" ] || [ "$range_code" = "200" ]
+
+      - name: Generate governed production record
+        id: report
+        shell: bash
+        run: |
+          set -euo pipefail
+          TASK_ID='${{ steps.submit.outputs.task_id }}'
+          code=$(curl --silent --show-error --output /tmp/report.json --write-out '%{http_code}' \
+            -X POST "$BASE_URL/api/deepal/media-studio/report" \
+            -H 'Content-Type: application/json' \
+            --data "{\"taskId\":\"$TASK_ID\"}")
+          cat /tmp/report.json
+          [ "$code" = "200" ] || { echo "::error::Report returned HTTP $code"; exit 1; }
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/report.json'))
+          report=data.get('report') or {}
+          integrity=report.get('integrity') or {}
+          governance=report.get('governance') or {}
+          if not integrity.get('recordSha256'):
+              raise SystemExit('Missing record SHA-256.')
+          if (governance.get('skill') or {}).get('id') != 'dpal-media-production-governance':
+              raise SystemExit('Missing DPAL media governance skill.')
+          print('Production record integrity and governance verified.')
+          print('Report ID:', report.get('reportId'))
+          PY
+
+      - name: Upload generated video and record
+        uses: actions/upload-artifact@v4
+        with:
+          name: densu-delta-evidence-studio-production-test
+          path: |
+            /tmp/densu-delta-evidence-studio.mp4
+            /tmp/report.json
+            /tmp/health.json
+            /tmp/submit.json
+            /tmp/status.json
+          retention-days: 7
+
+      - name: Publish test summary
+        shell: bash
+        run: |
+          {
+            echo '## DPAL Evidence Studio production test ✅'
+            echo
+            echo "- Task: ${{ steps.submit.outputs.task_id }}"
+            echo "- MP4: ${{ steps.poll.outputs.output_url }}"
+            echo '- Health, render, MP4 container, byte-range request, and governance record passed.'
+          } >> "$GITHUB_STEP_SUMMARY"
