@@ -1,0 +1,164 @@
+name: Test Stable DPAL Evidence Studio Render
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/test-dpal-evidence-studio-stable-render.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE_URL: https://www.dpal.info
+    steps:
+      - name: Confirm renderer is ready
+        run: |
+          curl --fail --silent --show-error "$BASE_URL/api/deepal/media-studio" -o /tmp/health.json
+          cat /tmp/health.json
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/health.json'))
+          if not (data.get('ok') and data.get('rendererReady')):
+              raise SystemExit('Renderer is not ready.')
+          PY
+
+      - name: Submit controlled Densu Delta render
+        id: submit
+        run: |
+          cat > /tmp/request.json <<'JSON'
+          {
+            "projectReference":"DENSU-DELTA-LIVE-TEST-002",
+            "title":"Densu Delta Mangrove Monitoring Test",
+            "script":"This controlled DPAL Evidence Studio test documents mangrove restoration monitoring in the Densu Delta. It verifies Chatterbox narration, readable captions, branded environmental scenes, playback, download, and production record generation. This draft contains no verified project claims and requires human review before publication.",
+            "evidenceReferences":"TEST-ONLY-NO-PROJECT-CLAIMS",
+            "visualKeywords":"Ghana mangrove restoration, coastal wetland monitoring, mangrove seedlings, environmental field team",
+            "aspect":"16:9",
+            "language":"en",
+            "voiceName":"Server-configured Chatterbox voice",
+            "source":"native",
+            "subtitleEnabled":true,
+            "backgroundMusic":false,
+            "reviewConfirmed":true
+          }
+          JSON
+          code=$(curl --silent --show-error --output /tmp/submit.json --write-out '%{http_code}' \
+            -X POST "$BASE_URL/api/deepal/media-studio" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/request.json)
+          cat /tmp/submit.json
+          [ "$code" = "202" ] || { echo "submit HTTP $code"; exit 1; }
+          TASK_ID=$(python - <<'PY'
+          import json
+          print((json.load(open('/tmp/submit.json')).get('job') or {}).get('id') or '')
+          PY
+          )
+          test -n "$TASK_ID"
+          echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
+          echo "TASK_ID=$TASK_ID"
+
+      - name: Poll until completed
+        id: poll
+        run: |
+          TASK_ID='${{ steps.submit.outputs.task_id }}'
+          for attempt in $(seq 1 150); do
+            sleep 5
+            code=$(curl --silent --show-error --output /tmp/status.json --write-out '%{http_code}' "$BASE_URL/api/deepal/media-studio/$TASK_ID")
+            if [ "$code" != "200" ]; then
+              echo "attempt=$attempt HTTP=$code"
+              continue
+            fi
+            python - <<'PY'
+          import json
+          job=(json.load(open('/tmp/status.json')).get('job') or {})
+          print(f"status={job.get('status')} progress={job.get('progress')} queue={job.get('queuePosition')} voice={job.get('voiceIncluded')} outputs={job.get('outputs')}")
+          PY
+            STATUS=$(python - <<'PY'
+          import json
+          print((json.load(open('/tmp/status.json')).get('job') or {}).get('status') or '')
+          PY
+          )
+            if [ "$STATUS" = "completed" ]; then
+              OUTPUT=$(python - <<'PY'
+          import json
+          outputs=(json.load(open('/tmp/status.json')).get('job') or {}).get('outputs') or []
+          print(outputs[0] if outputs else '')
+          PY
+              )
+              test -n "$OUTPUT"
+              case "$OUTPUT" in http*) URL="$OUTPUT" ;; *) URL="$BASE_URL$OUTPUT" ;; esac
+              echo "output_url=$URL" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$STATUS" = "failed" ]; then
+              cat /tmp/status.json
+              exit 1
+            fi
+          done
+          echo 'Render timed out.'
+          exit 1
+
+      - name: Download and validate MP4
+        run: |
+          URL='${{ steps.poll.outputs.output_url }}'
+          curl --fail --location --show-error "$URL" -o /tmp/densu-delta-evidence-studio.mp4
+          bytes=$(wc -c < /tmp/densu-delta-evidence-studio.mp4)
+          echo "MP4_BYTES=$bytes"
+          test "$bytes" -gt 50000
+          python - <<'PY'
+          head=open('/tmp/densu-delta-evidence-studio.mp4','rb').read(64)
+          if b'ftyp' not in head:
+              raise SystemExit('Invalid MP4 container.')
+          print('MP4 container verified.')
+          PY
+          code=$(curl --silent --show-error --output /tmp/range.bin --write-out '%{http_code}' -H 'Range: bytes=0-1023' "$URL")
+          echo "RANGE_HTTP=$code RANGE_BYTES=$(wc -c < /tmp/range.bin)"
+          [ "$code" = "206" ] || [ "$code" = "200" ]
+
+      - name: Generate production record
+        run: |
+          TASK_ID='${{ steps.submit.outputs.task_id }}'
+          curl --fail --silent --show-error \
+            -X POST "$BASE_URL/api/deepal/media-studio/report" \
+            -H 'Content-Type: application/json' \
+            --data "{\"taskId\":\"$TASK_ID\"}" \
+            -o /tmp/report.json
+          cat /tmp/report.json
+          python - <<'PY'
+          import json
+          report=(json.load(open('/tmp/report.json')).get('report') or {})
+          integrity=report.get('integrity') or {}
+          skill=(report.get('governance') or {}).get('skill') or {}
+          if not integrity.get('recordSha256'):
+              raise SystemExit('Missing record hash.')
+          if skill.get('id') != 'dpal-media-production-governance':
+              raise SystemExit('Missing media governance skill.')
+          print('REPORT_ID=', report.get('reportId'))
+          print('RECORD_SHA256=', integrity.get('recordSha256'))
+          PY
+
+      - name: Upload video and evidence record
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpal-evidence-studio-densu-live-video
+          path: |
+            /tmp/densu-delta-evidence-studio.mp4
+            /tmp/report.json
+            /tmp/health.json
+            /tmp/submit.json
+            /tmp/status.json
+          retention-days: 7
+
+      - name: Summary
+        run: |
+          {
+            echo '## DPAL Evidence Studio live render ✅'
+            echo
+            echo "- Task ID: ${{ steps.submit.outputs.task_id }}"
+            echo "- Live MP4: ${{ steps.poll.outputs.output_url }}"
+            echo '- Renderer health, Chatterbox narration path, MP4 container, range playback, and governed production record were tested.'
+          } >> "$GITHUB_STEP_SUMMARY"
