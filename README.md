@@ -23,12 +23,16 @@ This folder contains the **dashboard-only** files so you can work on them separa
 - **`src/lib/hq-architecture.ts`** — Series 3: config categories, API response/error shapes, env vars, module names, endpoint registry type.
 - **`pages/MasterEnterpriseDashboard.tsx`** — HQ UI: command bar, full left menu, overview, sites, reports, triage board, ledger/evidence/AI/users/audit/integrations/settings placeholders, detail inspector with AI + workflow timeline.
 - **`app/enterprise/page.tsx`** — Next.js App Router page that renders the dashboard at `/enterprise`.
+- **`app/media-studio/`** — Human-reviewed video drafting interface powered by a protected MoneyPrinterTurbo adapter.
+- **`app/api/media-studio/`** — Server-only health, create-task, status, and protected asset streaming routes.
+- **`src/lib/moneyprinter.ts`** — Input validation, authentication, upstream client, output normalization, and asset-path controls.
 
 ## Where to place these in your project
 
 1. **`src/lib/dpal-api.ts`** → your project’s `src/lib/dpal-api.ts` (create `src/lib` if needed).
-2. **`src/pages/MasterEnterpriseDashboard.tsx`** → your project’s `src/pages/MasterEnterpriseDashboard.tsx`.
+2. **`pages/MasterEnterpriseDashboard.tsx`** → your project’s `pages/MasterEnterpriseDashboard.tsx`.
 3. **`app/enterprise/page.tsx`** → your project’s `app/enterprise/page.tsx` (create `app/enterprise` if needed).
+4. Keep the Media Studio API routes in the same Next.js application so credentials and renderer URLs remain server-side.
 
 ## Requirements in the target project
 
@@ -42,8 +46,15 @@ This folder contains the **dashboard-only** files so you can work on them separa
 
 In the project that serves this dashboard, set:
 
-- `NEXT_PUBLIC_DPAL_API_BASE` — base URL of your DPAL API (e.g. `https://your-dpal-api.up.railway.app`).
+- `NEXT_PUBLIC_DPAL_API_BASE` — base URL of your DPAL API (for example, `https://your-dpal-api.up.railway.app`).
+- `MONEYPRINTER_API_URL` — private MoneyPrinterTurbo API URL, normally port `8080`.
+- `MONEYPRINTER_API_KEY` — optional upstream `x-api-key`.
+- `DPAL_MEDIA_STUDIO_ACCESS_TOKEN` — recommended operator token protecting render requests.
+- `MONEYPRINTER_REQUEST_TIMEOUT_MS` — optional API-call timeout.
 
-## Route
+See **`docs/MONEYPRINTER_TURBO.md`** for deployment, security, and production-hardening instructions.
 
-After copying, the dashboard is available at: **`/enterprise`**.
+## Routes
+
+- Enterprise HQ: **`/enterprise`**
+- DPAL Media Studio: **`/media-studio`**
