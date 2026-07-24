@@ -13,101 +13,119 @@ permissions:
 jobs:
   configure:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
-      RAW_RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       PROJECT_ID: 2048ef16-f61f-4908-91d5-a10272b6a934
       ENVIRONMENT_ID: e0bbfc3b-876d-4694-9f56-428d87f581e4
       SERVICE_ID: 6f486eff-edf3-41af-83bf-a0b5d51bcaec
+      RAILWAY_GRAPHQL_URL: https://backboard.railway.com/graphql/v2
     steps:
-      - name: Verify Railway credential is present
-        run: test -n "$RAW_RAILWAY_TOKEN"
-
-      - name: Detect Railway credential scope
+      - name: Verify Railway project credential and scope
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/project-token-query.json <<'JSON'
+          test -n "$RAILWAY_PROJECT_TOKEN"
+          cat > /tmp/token-query.json <<'JSON'
           {"query":"query { projectToken { projectId environmentId } }"}
           JSON
-          curl --silent --show-error \
-            -X POST https://backboard.railway.com/graphql/v2 \
-            -H "Project-Access-Token: $RAW_RAILWAY_TOKEN" \
+          curl --fail --silent --show-error \
+            -X POST "$RAILWAY_GRAPHQL_URL" \
+            -H "Project-Access-Token: $RAILWAY_PROJECT_TOKEN" \
             -H 'Content-Type: application/json' \
-            --data-binary @/tmp/project-token-query.json \
-            -o /tmp/project-token-response.json || true
-
-          if python - <<'PY'
-          import json
-          try:
-              data=json.load(open('/tmp/project-token-response.json'))
-              token=(data.get('data') or {}).get('projectToken') or {}
-              raise SystemExit(0 if token.get('projectId') else 1)
-          except Exception:
-              raise SystemExit(1)
+            --data-binary @/tmp/token-query.json \
+            -o /tmp/token-response.json
+          python - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/token-response.json'))
+          if data.get('errors'):
+              raise SystemExit(data['errors'])
+          token=(data.get('data') or {}).get('projectToken') or {}
+          if token.get('projectId') != os.environ['PROJECT_ID']:
+              raise SystemExit(f"Token project mismatch: {token.get('projectId')}")
+          if token.get('environmentId') != os.environ['ENVIRONMENT_ID']:
+              raise SystemExit(f"Token environment mismatch: {token.get('environmentId')}")
+          print('Railway project token scope confirmed.')
           PY
-          then
-            echo "Railway project credential detected."
-            echo "RAILWAY_TOKEN=$RAW_RAILWAY_TOKEN" >> "$GITHUB_ENV"
-            exit 0
-          fi
 
-          python - <<'PY' > /tmp/account-token-query.json
+      - name: Configure Railpack runtime packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/variables-mutation.json
           import json, os
           print(json.dumps({
-              'query': 'query project($id: String!) { project(id: $id) { id name } }',
-              'variables': {'id': os.environ['PROJECT_ID']},
+              'query': 'mutation variableCollectionUpsert($input: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $input) }',
+              'variables': {
+                  'input': {
+                      'projectId': os.environ['PROJECT_ID'],
+                      'environmentId': os.environ['ENVIRONMENT_ID'],
+                      'serviceId': os.environ['SERVICE_ID'],
+                      'variables': {
+                          'RAILPACK_BUILD_APT_PACKAGES': 'ffmpeg',
+                          'RAILPACK_DEPLOY_APT_PACKAGES': 'ffmpeg',
+                          'MEDIA_STUDIO_MAX_CONCURRENT_RENDERS': '1'
+                      },
+                      'skipDeploys': True
+                  }
+              }
           }))
           PY
-          curl --silent --show-error \
-            -X POST https://backboard.railway.com/graphql/v2 \
-            -H "Authorization: Bearer $RAW_RAILWAY_TOKEN" \
+          curl --fail --silent --show-error \
+            -X POST "$RAILWAY_GRAPHQL_URL" \
+            -H "Project-Access-Token: $RAILWAY_PROJECT_TOKEN" \
             -H 'Content-Type: application/json' \
-            --data-binary @/tmp/account-token-query.json \
-            -o /tmp/account-token-response.json || true
-
-          if python - <<'PY'
+            --data-binary @/tmp/variables-mutation.json \
+            -o /tmp/variables-response.json
+          python - <<'PY'
           import json
-          try:
-              data=json.load(open('/tmp/account-token-response.json'))
-              project=(data.get('data') or {}).get('project') or {}
-              raise SystemExit(0 if project.get('id') else 1)
-          except Exception:
-              raise SystemExit(1)
+          data=json.load(open('/tmp/variables-response.json'))
+          if data.get('errors'):
+              raise SystemExit(data['errors'])
+          if (data.get('data') or {}).get('variableCollectionUpsert') is not True:
+              raise SystemExit('Railway did not confirm variable update.')
+          print('Railpack FFmpeg variables configured.')
           PY
-          then
-            echo "Railway account/workspace credential detected."
-            echo "RAILWAY_API_TOKEN=$RAW_RAILWAY_TOKEN" >> "$GITHUB_ENV"
-            exit 0
-          fi
 
-          echo '::error::The stored Railway credential cannot access the DPAL Railway project.'
-          exit 1
-
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli
-
-      - name: Link production web service
-        run: railway link --project "$PROJECT_ID" --environment "$ENVIRONMENT_ID" --service "$SERVICE_ID"
-
-      - name: Configure Railpack FFmpeg packages
+      - name: Trigger Railway web deployment
+        id: deploy
+        shell: bash
         run: |
-          railway variable set RAILPACK_BUILD_APT_PACKAGES=ffmpeg --skip-deploys --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID"
-          railway variable set RAILPACK_DEPLOY_APT_PACKAGES=ffmpeg --skip-deploys --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID"
-          railway variable set MEDIA_STUDIO_MAX_CONCURRENT_RENDERS=1 --skip-deploys --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID"
-
-      - name: Confirm non-secret configuration
-        run: |
-          railway variable list --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID" --kv \
-            | grep -E '^(RAILPACK_BUILD_APT_PACKAGES|RAILPACK_DEPLOY_APT_PACKAGES|MEDIA_STUDIO_MAX_CONCURRENT_RENDERS)='
-
-      - name: Redeploy Railway web service
-        run: railway redeploy --service "$SERVICE_ID" --environment "$ENVIRONMENT_ID" --yes
+          set -euo pipefail
+          python - <<'PY' > /tmp/deploy-mutation.json
+          import json, os
+          print(json.dumps({
+              'query': 'mutation serviceInstanceDeploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId) }',
+              'variables': {
+                  'serviceId': os.environ['SERVICE_ID'],
+                  'environmentId': os.environ['ENVIRONMENT_ID']
+              }
+          }))
+          PY
+          curl --fail --silent --show-error \
+            -X POST "$RAILWAY_GRAPHQL_URL" \
+            -H "Project-Access-Token: $RAILWAY_PROJECT_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/deploy-mutation.json \
+            -o /tmp/deploy-response.json
+          DEPLOYMENT_ID=$(python - <<'PY'
+          import json
+          data=json.load(open('/tmp/deploy-response.json'))
+          if data.get('errors'):
+              raise SystemExit(data['errors'])
+          print((data.get('data') or {}).get('serviceInstanceDeploy') or '')
+          PY
+          )
+          test -n "$DEPLOYMENT_ID"
+          echo "deployment_id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
+          echo "Railway deployment started: $DEPLOYMENT_ID"
 
       - name: Wait for Evidence Studio renderer
+        shell: bash
         run: |
+          set -euo pipefail
           ready=0
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 120); do
             code=$(curl --silent --show-error --output /tmp/health.json --write-out '%{http_code}' https://web-production-a27b.up.railway.app/api/deepal/media-studio || true)
             echo "attempt=$attempt http=$code body=$(cat /tmp/health.json 2>/dev/null || true)"
             if [ "$code" = "200" ]; then
