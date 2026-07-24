@@ -1,7 +1,7 @@
 name: Test Evidence Studio Render
 
 on:
-  push:
+  pull_request:
     branches: [main]
     paths:
       - ".github/workflows/test-evidence-studio-render.yml"
@@ -57,7 +57,6 @@ jobs:
           echo "Testing deployment: $BASE_URL"
 
       - name: Check Evidence Studio renderer health
-        id: health
         shell: bash
         run: |
           set -euo pipefail
