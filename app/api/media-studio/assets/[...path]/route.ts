@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
-  isMediaStudioAuthorized,
   MediaStudioValidationError,
   upstreamAssetHeaders,
   upstreamAssetUrl,
@@ -24,13 +23,6 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
 ): Promise<NextResponse> {
-  if (!isMediaStudioAuthorized(request)) {
-    return NextResponse.json(
-      { ok: false, error: "Evidence Studio access token required." },
-      { status: 401 },
-    );
-  }
-
   try {
     const { path } = await context.params;
     const upstream = await fetch(upstreamAssetUrl(path), {
