@@ -1,0 +1,54 @@
+name: Diagnose Evidence Studio Voice
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-evidence-studio-voice.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  voice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE_URL: https://www.dpal.info
+    steps:
+      - name: Read voice health
+        run: |
+          curl --fail --silent --show-error "$BASE_URL/api/deepal/voice/health" -o /tmp/voice-health.json
+          cat /tmp/voice-health.json
+
+      - name: Test JSON synthesis response
+        run: |
+          cat > /tmp/voice-request.json <<'JSON'
+          {
+            "text":"This is a controlled DPAL Evidence Studio narration test for the Densu Delta mangrove monitoring video.",
+            "workspace":"DPAL Evidence Studio",
+            "module":"media-production"
+          }
+          JSON
+          code=$(curl --silent --show-error --output /tmp/voice-json-response.bin --write-out '%{http_code}' \
+            -X POST "$BASE_URL/api/deepal/voice/synthesize" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/voice-request.json)
+          echo "JSON_SYNTH_HTTP=$code BYTES=$(wc -c < /tmp/voice-json-response.bin)"
+          head -c 1500 /tmp/voice-json-response.bin || true
+          echo
+
+      - name: Test binary synthesis response
+        run: |
+          code=$(curl --silent --show-error --dump-header /tmp/voice-audio-headers.txt --output /tmp/voice-audio.bin --write-out '%{http_code}' \
+            -X POST "$BASE_URL/api/deepal/voice/synthesize/audio" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/voice-request.json)
+          echo "AUDIO_SYNTH_HTTP=$code BYTES=$(wc -c < /tmp/voice-audio.bin)"
+          cat /tmp/voice-audio-headers.txt
+          file /tmp/voice-audio.bin || true
+          if [ "$code" != "200" ]; then
+            cat /tmp/voice-audio.bin || true
+            exit 1
+          fi
+          test $(wc -c < /tmp/voice-audio.bin) -gt 1000
