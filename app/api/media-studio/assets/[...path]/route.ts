@@ -5,7 +5,7 @@ import {
   MediaStudioValidationError,
   upstreamAssetHeaders,
   upstreamAssetUrl,
-} from "@/src/lib/moneyprinter";
+} from "@/src/lib/media-renderer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +25,10 @@ export async function GET(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<NextResponse> {
   if (!isMediaStudioAuthorized(request)) {
-    return NextResponse.json({ ok: false, error: "Media Studio access token required." }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: "Evidence Studio access token required." },
+      { status: 401 },
+    );
   }
 
   try {
@@ -41,14 +44,24 @@ export async function GET(
     if (!upstream.ok && upstream.status !== 206) {
       const status = upstream.status === 404 || upstream.status === 416 ? upstream.status : 502;
       return NextResponse.json(
-        { ok: false, error: status === 404 ? "Rendered asset not found." : "Rendered asset is unavailable." },
+        {
+          ok: false,
+          error: status === 404 ? "Rendered asset not found." : "Rendered asset is unavailable.",
+        },
         { status },
       );
     }
 
     const contentType = upstream.headers.get("content-type");
-    if (contentType && !contentType.startsWith("video/") && !contentType.startsWith("application/octet-stream")) {
-      return NextResponse.json({ ok: false, error: "The renderer returned an unexpected asset type." }, { status: 502 });
+    if (
+      contentType &&
+      !contentType.startsWith("video/") &&
+      !contentType.startsWith("application/octet-stream")
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "The renderer returned an unexpected asset type." },
+        { status: 502 },
+      );
     }
 
     const headers = new Headers({
@@ -73,6 +86,9 @@ export async function GET(
     if (error instanceof MediaStudioValidationError) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     }
-    return NextResponse.json({ ok: false, error: "Rendered asset is unavailable." }, { status: 502 });
+    return NextResponse.json(
+      { ok: false, error: "Rendered asset is unavailable." },
+      { status: 502 },
+    );
   }
 }
