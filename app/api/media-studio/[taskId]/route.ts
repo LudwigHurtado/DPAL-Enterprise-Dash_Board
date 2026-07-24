@@ -1,9 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import {
-  attachMediaStudioSession,
   getMediaRenderJob,
-  isMediaStudioAuthorized,
   MediaRendererError,
   MediaStudioValidationError,
 } from "@/src/lib/media-renderer";
@@ -26,20 +24,13 @@ function errorResponse(error: unknown): NextResponse {
 }
 
 export async function GET(
-  request: NextRequest,
+  _request: Request,
   context: { params: Promise<{ taskId: string }> },
 ): Promise<NextResponse> {
-  if (!isMediaStudioAuthorized(request)) {
-    return NextResponse.json(
-      { ok: false, error: "Evidence Studio access token required.", requiresAccessToken: true },
-      { status: 401 },
-    );
-  }
-
   try {
     const { taskId } = await context.params;
     const job = await getMediaRenderJob(taskId);
-    return attachMediaStudioSession(NextResponse.json({ ok: true, job }));
+    return NextResponse.json({ ok: true, job });
   } catch (error) {
     return errorResponse(error);
   }
