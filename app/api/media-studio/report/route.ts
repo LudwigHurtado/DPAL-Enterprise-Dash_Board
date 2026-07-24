@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
-  attachMediaStudioSession,
   createMediaProductionReport,
-  isMediaStudioAuthorized,
   MediaRendererError,
   MediaStudioValidationError,
   parseProductionReportRequest,
@@ -27,20 +25,13 @@ function errorResponse(error: unknown): NextResponse {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  if (!isMediaStudioAuthorized(request)) {
-    return NextResponse.json(
-      { ok: false, error: "Evidence Studio access token required.", requiresAccessToken: true },
-      { status: 401 },
-    );
-  }
-
   try {
     const body = await request.json();
     const { taskId, input } = parseProductionReportRequest(body);
     const report = await createMediaProductionReport(taskId, input);
     const filename = `${report.reportId.toLowerCase()}.json`;
 
-    const response = NextResponse.json(
+    return NextResponse.json(
       {
         ok: true,
         report,
@@ -56,7 +47,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       },
     );
-    return attachMediaStudioSession(response);
   } catch (error) {
     if (error instanceof SyntaxError) {
       return NextResponse.json(
