@@ -305,7 +305,7 @@ function collectOutputs(data: MoneyPrinterTaskData): string[] {
     .flatMap((value) => (Array.isArray(value) ? value : []))
     .map(toProxyAssetUrl)
     .filter((value): value is string => Boolean(value));
-  return [...new Set(candidates)];
+  return Array.from(new Set(candidates));
 }
 
 function normalizeJob(data: MoneyPrinterTaskData): MediaJob {
