@@ -1,0 +1,70 @@
+name: Diagnose Chatterbox Railway Runtime
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-chatterbox-runtime.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      PROJECT_ID: 2048ef16-f61f-4908-91d5-a10272b6a934
+      SERVICE_ID: 97c45c43-4d6c-4911-b9db-be30fb944eab
+      RAILWAY_GRAPHQL_URL: https://backboard.railway.com/graphql/v2
+    steps:
+      - name: Query recent Chatterbox deployments and logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > /tmp/deployments.json
+          import json, os
+          print(json.dumps({
+              'query': 'query deployments($input: DeploymentListInput!) { deployments(input: $input, first: 5) { edges { node { id status createdAt } } } }',
+              'variables': {'input': {'projectId': os.environ['PROJECT_ID'], 'serviceId': os.environ['SERVICE_ID']}}
+          }))
+          PY
+          curl --fail --silent --show-error \
+            -X POST "$RAILWAY_GRAPHQL_URL" \
+            -H "Project-Access-Token: $RAILWAY_PROJECT_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/deployments.json \
+            -o /tmp/deployments-response.json
+          cat /tmp/deployments-response.json
+          LATEST_ID=$(python - <<'PY'
+          import json
+          data=json.load(open('/tmp/deployments-response.json'))
+          if data.get('errors'):
+              raise SystemExit(data['errors'])
+          edges=((data.get('data') or {}).get('deployments') or {}).get('edges') or []
+          print(((edges[0] if edges else {}).get('node') or {}).get('id') or '')
+          PY
+          )
+          test -n "$LATEST_ID"
+          python - <<'PY' "$LATEST_ID" > /tmp/logs.json
+          import json, sys
+          print(json.dumps({
+              'query': 'query deploymentLogs($deploymentId: String!, $limit: Int) { deploymentLogs(deploymentId: $deploymentId, limit: $limit) { timestamp message severity } }',
+              'variables': {'deploymentId': sys.argv[1], 'limit': 300}
+          }))
+          PY
+          curl --fail --silent --show-error \
+            -X POST "$RAILWAY_GRAPHQL_URL" \
+            -H "Project-Access-Token: $RAILWAY_PROJECT_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/logs.json \
+            -o /tmp/logs-response.json
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/logs-response.json'))
+          if data.get('errors'):
+              raise SystemExit(data['errors'])
+          for entry in (data.get('data') or {}).get('deploymentLogs') or []:
+              print(f"{entry.get('timestamp')} {entry.get('severity')} {entry.get('message')}")
+          PY
