@@ -19,29 +19,25 @@ jobs:
       SERVICE_ID: 97c45c43-4d6c-4911-b9db-be30fb944eab
       RAILWAY_GRAPHQL_URL: https://backboard.railway.com/graphql/v2
     steps:
-      - name: Query recent Chatterbox deployments and logs
+      - name: Query focused Chatterbox runtime logs
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY' > /tmp/deployments.json
           import json, os
           print(json.dumps({
-              'query': 'query deployments($input: DeploymentListInput!) { deployments(input: $input, first: 5) { edges { node { id status createdAt } } } }',
+              'query': 'query deployments($input: DeploymentListInput!) { deployments(input: $input, first: 1) { edges { node { id status createdAt } } } }',
               'variables': {'input': {'projectId': os.environ['PROJECT_ID'], 'serviceId': os.environ['SERVICE_ID']}}
           }))
           PY
-          curl --fail --silent --show-error \
-            -X POST "$RAILWAY_GRAPHQL_URL" \
+          curl --fail --silent --show-error -X POST "$RAILWAY_GRAPHQL_URL" \
             -H "Project-Access-Token: $RAILWAY_PROJECT_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data-binary @/tmp/deployments.json \
+            -H 'Content-Type: application/json' --data-binary @/tmp/deployments.json \
             -o /tmp/deployments-response.json
-          cat /tmp/deployments-response.json
           LATEST_ID=$(python - <<'PY'
           import json
           data=json.load(open('/tmp/deployments-response.json'))
-          if data.get('errors'):
-              raise SystemExit(data['errors'])
+          if data.get('errors'): raise SystemExit(data['errors'])
           edges=((data.get('data') or {}).get('deployments') or {}).get('edges') or []
           print(((edges[0] if edges else {}).get('node') or {}).get('id') or '')
           PY
@@ -51,20 +47,21 @@ jobs:
           import json, sys
           print(json.dumps({
               'query': 'query deploymentLogs($deploymentId: String!, $limit: Int) { deploymentLogs(deploymentId: $deploymentId, limit: $limit) { timestamp message severity } }',
-              'variables': {'deploymentId': sys.argv[1], 'limit': 300}
+              'variables': {'deploymentId': sys.argv[1], 'limit': 500}
           }))
           PY
-          curl --fail --silent --show-error \
-            -X POST "$RAILWAY_GRAPHQL_URL" \
+          curl --fail --silent --show-error -X POST "$RAILWAY_GRAPHQL_URL" \
             -H "Project-Access-Token: $RAILWAY_PROJECT_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data-binary @/tmp/logs.json \
+            -H 'Content-Type: application/json' --data-binary @/tmp/logs.json \
             -o /tmp/logs-response.json
           python - <<'PY'
-          import json
+          import json, re
           data=json.load(open('/tmp/logs-response.json'))
-          if data.get('errors'):
-              raise SystemExit(data['errors'])
-          for entry in (data.get('data') or {}).get('deploymentLogs') or []:
+          if data.get('errors'): raise SystemExit(data['errors'])
+          pattern=re.compile(r'(memory|model|synth|503|error|exception|traceback|killed|oom|out of memory|failed|download|torch|voice)', re.I)
+          entries=(data.get('data') or {}).get('deploymentLogs') or []
+          selected=[entry for entry in entries if pattern.search(str(entry.get('message') or ''))]
+          for entry in selected[-120:]:
               print(f"{entry.get('timestamp')} {entry.get('severity')} {entry.get('message')}")
+          print(f"FILTERED_LOG_COUNT={len(selected)} TOTAL_LOG_COUNT={len(entries)}")
           PY
