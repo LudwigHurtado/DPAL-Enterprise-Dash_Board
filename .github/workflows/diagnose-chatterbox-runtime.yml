@@ -19,7 +19,7 @@ jobs:
       SERVICE_ID: 97c45c43-4d6c-4911-b9db-be30fb944eab
       RAILWAY_GRAPHQL_URL: https://backboard.railway.com/graphql/v2
     steps:
-      - name: Query Chatterbox failure traceback window
+      - name: Inspect latest Python 3.11 Chatterbox deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -31,6 +31,7 @@ jobs:
           }))
           PY
           curl --fail --silent --show-error -X POST "$RAILWAY_GRAPHQL_URL" -H "Project-Access-Token: $RAILWAY_PROJECT_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/deployments.json -o /tmp/deployments-response.json
+          cat /tmp/deployments-response.json
           LATEST_ID=$(python - <<'PY'
           import json
           data=json.load(open('/tmp/deployments-response.json'))
@@ -44,17 +45,18 @@ jobs:
           import json, sys
           print(json.dumps({
               'query': 'query deploymentLogs($deploymentId: String!, $limit: Int) { deploymentLogs(deploymentId: $deploymentId, limit: $limit) { timestamp message severity } }',
-              'variables': {'deploymentId': sys.argv[1], 'limit': 500}
+              'variables': {'deploymentId': sys.argv[1], 'limit': 300}
           }))
           PY
           curl --fail --silent --show-error -X POST "$RAILWAY_GRAPHQL_URL" -H "Project-Access-Token: $RAILWAY_PROJECT_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/logs.json -o /tmp/logs-response.json
           python - <<'PY'
-          import json
+          import json, re
           data=json.load(open('/tmp/logs-response.json'))
           if data.get('errors'): raise SystemExit(data['errors'])
           entries=(data.get('data') or {}).get('deploymentLogs') or []
-          for entry in entries:
-              timestamp=str(entry.get('timestamp') or '')
-              if '2026-07-24T23:57:25' <= timestamp <= '2026-07-24T23:58:25':
-                  print(f"{timestamp} {entry.get('severity')} {entry.get('message')}")
+          pattern=re.compile(r'(python|pip|torch|chatterbox|install|build|error|failed|starting|uvicorn|memory)', re.I)
+          selected=[e for e in entries if pattern.search(str(e.get('message') or ''))]
+          for entry in selected[-120:]:
+              print(f"{entry.get('timestamp')} {entry.get('severity')} {entry.get('message')}")
+          print(f"SELECTED={len(selected)} TOTAL={len(entries)}")
           PY
